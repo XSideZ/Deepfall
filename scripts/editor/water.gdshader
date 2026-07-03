@@ -48,11 +48,18 @@ void fragment() {
 	vec3 col = mix(shallow_color, deep_color, depth);
 	col = mix(col, shallow_color * 1.15, fres * 0.25);  // faint bright rim at grazing angles
 
-	// shoreline foam: bright band where the water is very shallow, broken up by the ripple noise
+	// shoreline foam: a bright edge band PLUS animated ripple bands that roll toward
+	// the beach and dissolve (stylized PC look)
 	float shore = 1.0 - smoothstep(0.0, foam_width, depth_m);
 	float fn = texture(normal_map, p * 0.2 + vec2(TIME * 0.03, TIME * 0.02)).x;
 	shore = clamp(shore * (0.5 + fn), 0.0, 1.0);
 	shore = shore * shore;
+	// rolling bands: rings of foam sweep shoreward through the shallows
+	float band_zone = 1.0 - smoothstep(0.4, 5.0, depth_m);
+	float band = sin(depth_m * 2.4 - TIME * 1.4);
+	float foam_band = smoothstep(0.72, 0.95, band) * band_zone;
+	foam_band *= smoothstep(0.35, 0.75, texture(normal_map, p * 0.11 + vec2(TIME * 0.02, -TIME * 0.015)).x + 0.25);
+	shore = clamp(shore + foam_band * 0.8, 0.0, 1.0);
 	col = mix(col, foam_color, shore);
 
 	ALBEDO = col * day_mult;

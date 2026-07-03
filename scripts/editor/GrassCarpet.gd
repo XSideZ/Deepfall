@@ -10,16 +10,21 @@ var cell := 0.68
 var radius := 54.0
 var mat: ShaderMaterial
 
-## mode 0 = land grass, 1 = sea grass.
-func setup(mode: int) -> void:
+## mode 0 = land (biome/bloom gated), 1 = sea (submerged only).
+## mesh_file picks any clump from the nature pack; cell/radius/height tune the layer.
+func setup(mode: int, mesh_file := "Grass_Common_Short.fbx", p_cell := 0.0, p_radius := 0.0, p_height := 0.0) -> void:
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if mode == 1:
 		cell = 0.95
 		radius = 42.0
+	if p_cell > 0.0:
+		cell = p_cell
+	if p_radius > 0.0:
+		radius = p_radius
 
 	# clump mesh + its albedo texture from the nature pack
 	var nat: Dictionary = ResourceScatterScript.nature_index()
-	var path: String = nat.get("Grass_Common_Short.fbx", "")
+	var path: String = nat.get(mesh_file, "")
 	if path == "" or not ResourceLoader.exists(path):
 		return
 	var ps = load(path)
@@ -44,7 +49,8 @@ func setup(mode: int) -> void:
 	mat.set_shader_parameter("albedo_tex", albedo)
 	mat.set_shader_parameter("mode", mode)
 	mat.set_shader_parameter("cell", cell)
-	mat.set_shader_parameter("base_scale", (0.5 if mode == 0 else 0.62) / maxf(ab.size.y, 0.001))
+	var target_h := p_height if p_height > 0.0 else (0.5 if mode == 0 else 0.62)
+	mat.set_shader_parameter("base_scale", target_h / maxf(ab.size.y, 0.001))
 	mat.set_shader_parameter("mesh_h", ab.size.y)
 	mat.set_shader_parameter("fade_start", radius * 0.55)
 	mat.set_shader_parameter("fade_end", radius * 0.96)

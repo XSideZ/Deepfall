@@ -35,8 +35,7 @@ var camera
 var terrain
 var flora
 var flora_density := 100   # percent
-var land_carpet
-var sea_carpet
+var carpets: Array = []    # dense GPU ground-cover layers (land + sea)
 var resource_scatter
 var rock_count := 60
 var tree_count := 50
@@ -201,14 +200,21 @@ func _ready() -> void:
 	_build_terrain(grid_size)
 	flora = FloraScatterScript.new()
 	add_child(flora)
-	# dense near-field carpets: land grass + sea grass (GPU-placed, camera-following)
+	# dense near-field carpets, layered like the refs: short lawn + tall wisps +
+	# clover on land; seagrass + leafy anemone-ish clusters below the waves
 	var GrassCarpetScript := load("res://scripts/editor/GrassCarpet.gd")
-	land_carpet = GrassCarpetScript.new()
-	add_child(land_carpet)
-	land_carpet.setup(0)
-	sea_carpet = GrassCarpetScript.new()
-	add_child(sea_carpet)
-	sea_carpet.setup(1)
+	var layer_specs := [
+		[0, "Grass_Common_Short.fbx", 0.68, 54.0, 0.5],
+		[0, "Grass_Wispy_Tall.fbx", 1.5, 46.0, 0.85],
+		[0, "Clover_1.fbx", 1.9, 30.0, 0.16],
+		[1, "Grass_Common_Short.fbx", 0.95, 42.0, 0.62],
+		[1, "Plant_1.fbx", 2.6, 38.0, 0.75],
+	]
+	for spec in layer_specs:
+		var c = GrassCarpetScript.new()
+		add_child(c)
+		c.setup(spec[0], spec[1], spec[2], spec[3], spec[4])
+		carpets.append(c)
 	resource_scatter = ResourceScatterScript.new()
 	add_child(resource_scatter)
 	resource_scatter.setup(self)
@@ -389,6 +395,8 @@ func _update_daynight(delta: float) -> void:
 			"day_mult", (0.22 + 0.78 * _day_f) * dim)
 
 	var env := world_env.environment
+	# painted skybox: dim the whole panorama through the night (it's a static image)
+	env.background_energy_multiplier = (0.18 + 0.82 * _day_f) if sky_mode == "hdri" else 1.0
 	if sky_mode == "space":
 		env.ambient_light_color = Color(0.30, 0.36, 0.52).lerp(Color(0.60, 0.68, 0.82), _day_f)
 		# midday ambient a touch lower than before -> sun shadows keep some depth
@@ -449,10 +457,8 @@ func _refresh_terrain_biome() -> void:
 		terrain_material.set_shader_parameter("biome_map", bt)
 	terrain_material.set_shader_parameter("terrain_span", float(grid_size))
 	var hm = terrain.height_texture()
-	if land_carpet:
-		land_carpet.wire(hm, bt, float(grid_size))
-	if sea_carpet:
-		sea_carpet.wire(hm, bt, float(grid_size))
+	for c in carpets:
+		c.wire(hm, bt, float(grid_size))
 
 func _build_terrain(n: int) -> void:
 	grid_size = n
@@ -1738,10 +1744,8 @@ func _update_weather(delta: float) -> void:
 		# carpets ride with the camera; refresh the height texture after sculpts
 		if terrain and terrain.hm_dirty:
 			terrain.height_texture()   # updates in place (same RID all shaders sample)
-		if land_carpet:
-			land_carpet.follow(cam3d.global_position, _eff_water())
-		if sea_carpet:
-			sea_carpet.follow(cam3d.global_position, _eff_water())
+		for c in carpets:
+			c.follow(cam3d.global_position, _eff_water())
 	if _underwater and underwater_bubbles and cam3d:
 		underwater_bubbles.global_position = cam3d.global_position + Vector3(0, -1.0, 0)
 		# shafts hang from the surface, drift slowly, breathe in brightness
@@ -2547,8 +2551,8 @@ func plant_flora_field(origin: Vector2, radius: float) -> void:
 func set_flora_front(origin: Vector2, front: float) -> void:
 	if flora:
 		flora.set_grow_front(origin, front)
-	if land_carpet:
-		land_carpet.set_bloom(origin, front)
+	for c in carpets:
+		c.set_bloom(origin, front)   # sea layers ignore the front in-shader
 
 ## Sprout living trees / wither dead ones out to `front` (throttled, incremental).
 func grow_trees_front(origin: Vector2, front: float, instant := false) -> void:
