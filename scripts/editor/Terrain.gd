@@ -275,11 +275,14 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			# stretch contrast: simplex is centre-heavy, so without this many seeds never
 			# reach the jungle tail at all
 			b01 = clampf((b01 - 0.5) * 1.8 + 0.5, 0.0, 1.0)
-			# desert + ice: radial regions with a noisy coastline-like edge
+			# desert + ice: radial regions with a WIDE, lobed transition band — big noise
+			# lobes push whole fingers of each biome into its neighbour, small noise
+			# roughs up the line, and the ~60m smoothstep lets ground colours cross-fade
 			var pv2 := Vector2(fx - half, fz - half)
-			var edge_n := biome_n.get_noise_2d(fx * 2.3, fz * 2.3) * 15.0
-			var w_desert := 1.0 - smoothstep(desert_r - 18.0, desert_r + 8.0, pv2.distance_to(desert_c) + edge_n)
-			var w_ice := 1.0 - smoothstep(ice_r - 18.0, ice_r + 8.0, pv2.distance_to(ice_c) + edge_n)
+			var edge_n := biome_n.get_noise_2d(fx * 0.9, fz * 0.9) * 24.0 \
+				+ biome_n.get_noise_2d(fx * 3.5, fz * 3.5) * 9.0
+			var w_desert := 1.0 - smoothstep(desert_r - 45.0, desert_r + 15.0, pv2.distance_to(desert_c) + edge_n)
+			var w_ice := 1.0 - smoothstep(ice_r - 45.0, ice_r + 15.0, pv2.distance_to(ice_c) + edge_n)
 			w_desert *= 1.0 - w_ice   # ice wins any overlap (they're seeded far apart)
 			var w_jungle := smoothstep(0.58, 0.80, b01) * (1.0 - w_desert) * (1.0 - w_ice)
 			var w_plain: float = clampf(1.0 - w_desert - w_jungle - w_ice, 0.0, 1.0)

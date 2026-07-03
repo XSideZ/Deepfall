@@ -84,11 +84,15 @@ void fragment() {
 	float macro = tri_luma(tex_grass, v_wpos, wnrm, macro_scale);
 	float clump = tri_luma(tex_grass, v_wpos, wnrm, tile_scale);
 	float fine = tri_luma(tex_grass, v_wpos, wnrm, 0.55);
+	float bmacro = tri_luma(tex_rock, v_wpos, wnrm, macro_scale * 1.6);
 	vec3 grass_col = mix(col_grass2, col_grass, smoothstep(0.30, 0.70, macro));
-	// biome tint: golden desert <- chartreuse plains -> deep jungle green
+	// biome tint: golden desert <- chartreuse plains -> deep jungle green.
+	// bio_d = biome value DITHERED by two noise scales, so boundaries interleave in
+	// organic patches (sand tongues into grass, grass tufts into sand) instead of a line
 	float bio = texture(biome_map, (v_wpos.xz + terrain_span * 0.5) / terrain_span).r;
-	grass_col = mix(col_grass_desert, grass_col, smoothstep(0.24, 0.44, bio));
-	grass_col = mix(grass_col, col_grass_jungle, smoothstep(0.58, 0.82, bio));
+	float bio_d = bio + (bmacro - 0.5) * 0.28 + (clump - 0.5) * 0.10;
+	grass_col = mix(col_grass_desert, grass_col, smoothstep(0.18, 0.50, bio_d));
+	grass_col = mix(grass_col, col_grass_jungle, smoothstep(0.56, 0.84, bio_d));
 	// detail centred on 1.0 so texture variation never darkens the palette overall
 	float clump_d = 1.0 + (smoothstep(0.28, 0.72, clump) - 0.5) * 0.34;
 	float fine_d = 1.0 + (smoothstep(0.35, 0.65, fine) - 0.5) * 0.58;
@@ -96,7 +100,6 @@ void fragment() {
 
 	// spatial bloom: distance from the seed, pushed around by noise so life creeps in
 	// ragged patches rather than a clean circle
-	float bmacro = tri_luma(tex_rock, v_wpos, wnrm, macro_scale * 1.6);
 	float d_seed = distance(v_wpos.xz, bloom_origin) + (bmacro - 0.5) * 2.0 * bloom_patch;
 	float b = bloom * (1.0 - smoothstep(bloom_radius - bloom_edge, bloom_radius, d_seed));
 
@@ -110,7 +113,7 @@ void fragment() {
 	// rock: red canyon in deserts, grey cliffs elsewhere; pale weathered banding
 	float rock_band = tri_luma(tex_rock, v_wpos, wnrm, 0.02);
 	vec3 rock_col = mix(col_rock, col_rock2, smoothstep(0.40, 0.62, rock_band));
-	rock_col = mix(rock_col, col_rock_grey, smoothstep(0.24, 0.52, bio));   // deserts stay red
+	rock_col = mix(rock_col, col_rock_grey, smoothstep(0.20, 0.56, bio_d));   // deserts stay red
 	rock_col = mix(col_dead_rock, rock_col, b);
 
 	vec3 sand_col = mix(col_dead_sand, col_sand, b);
@@ -120,11 +123,16 @@ void fragment() {
 	base = mix(base, sand_col, m_sand);
 
 	// ICE BIOME (bio ~1.7): snow blankets everything; steep rock shows through the
-	// drifts a little so cliffs still read as stone
-	float w_ice = smoothstep(1.30, 1.60, bio);
+	// drifts a little so cliffs still read as stone. Dithered edge = ragged drift
+	// fingers, and a FROST band dusts the approach before the full blanket.
+	float w_ice = smoothstep(1.22, 1.58, bio_d);
+	// frost gate uses the raw bio (only ice pushes it past 1.0) with light dither,
+	// so jungle at bio~1.0 never catches frost
+	float frost = smoothstep(1.04, 1.35, bio + (bmacro - 0.5) * 0.12) * (1.0 - w_ice);
 	float snow_grain = tri_luma(tex_snow, v_wpos, wnrm, tile_scale);
 	vec3 ice_col = col_snow * (0.88 + snow_grain * 0.24);
 	ice_col = mix(ice_col, vec3(0.72, 0.82, 0.94), smoothstep(0.5, 0.9, bmacro) * 0.35);  // icy blue patches
+	base = mix(base, col_snow * 0.94, frost * 0.45 * smoothstep(0.45, 0.65, clump));  // patchy frost dust
 	base = mix(base, ice_col, w_ice * (1.0 - m_rock * 0.45));
 
 	// faint texture detail (same masks) modulating brightness only
