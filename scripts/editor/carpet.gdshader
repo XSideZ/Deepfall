@@ -116,9 +116,9 @@ void vertex() {
 
 void fragment() {
 	vec4 tex = texture(albedo_tex, UV);
-	// use texture luminance as shape/shading, recolour fully with our tint
+	// keep the pack texture's own colour as the base; tint layers biome/accent on top
 	float lum = clamp(dot(tex.rgb, vec3(0.45)) + 0.55, 0.55, 1.25);
-	vec3 col = v_tint * lum;
+	vec3 col = mix(tex.rgb, v_tint * lum, mode == 0 ? 0.55 : 0.8);
 	col *= 0.72 + 0.28 * v_tip;   // darker at the roots -> depth inside the carpet
 	if (mode == 0 && v_extra > 0.5) {
 		col = mix(col, vec3(0.98, 0.97, 0.92), smoothstep(0.55, 0.95, v_tip));  // flower heads

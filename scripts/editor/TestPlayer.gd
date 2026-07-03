@@ -79,7 +79,8 @@ func _ready() -> void:
 
 	collision_layer = 4          # own layer (editor rays ignore us)
 	collision_mask = 1 | 2       # collide with terrain + props
-	floor_snap_length = 0.5      # stick to ramps and steps
+	floor_snap_length = 0.6      # stick to ramps and steps
+	floor_max_angle = deg_to_rad(55.0)   # steep tier ramps count as floor, not wall
 
 	# camera hangs off a pitch arm so third person can boom back behind the player
 	cam_arm = Node3D.new()
