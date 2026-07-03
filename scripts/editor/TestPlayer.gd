@@ -79,8 +79,8 @@ func _ready() -> void:
 
 	collision_layer = 4          # own layer (editor rays ignore us)
 	collision_mask = 1 | 2       # collide with terrain + props
-	floor_snap_length = 0.6      # stick to ramps and steps
-	floor_max_angle = deg_to_rad(55.0)   # steep tier ramps count as floor, not wall
+	floor_snap_length = 0.7      # stick to ramps and steps
+	floor_max_angle = deg_to_rad(62.0)   # run straight up steep hills — only near-vertical is a wall
 
 	# camera hangs off a pitch arm so third person can boom back behind the player
 	cam_arm = Node3D.new()
@@ -196,9 +196,9 @@ func _process(dt: float) -> void:
 		var pulse := 1.0 + sin(t * 2.3) * 0.05 + _absorb_pulse
 		hand.scale = Vector3(pulse, pulse, pulse)
 
-## Teleport up small ledges when walking into them (max ~0.65 m).
+## Teleport up small ledges when walking into them (max ~0.8 m).
 func _try_step(dir: Vector3) -> void:
-	var step := 0.65
+	var step := 0.8
 	var xf := global_transform
 	# only step when actually BLOCKED ahead — grazing along a wall must not trigger
 	# (stepping forward every frame while sliding was a free speed boost)

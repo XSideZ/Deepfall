@@ -18,7 +18,7 @@ const BuildSystemScript := preload("res://scripts/editor/BuildSystem.gd")
 const SAVE_PATH := "user://deepfall_map.json"
 const HEIGHTS_PATH := "user://deepfall_heights.bin"
 const SETTINGS_PATH := "user://editor_settings.json"
-const HDRI_PATH := "res://assets/sky/kloofendal_puresky_4k.hdr"
+const HDRI_PATH := "res://assets/sky/sky_89_2k.png"   # stylized painted skybox (Jay's download)
 const GROUND_LAYER := 1
 const PROP_LAYER := 2
 
