@@ -139,4 +139,5 @@ void fragment() {
 	SPECULAR = 0.15;
 	ALPHA = tex.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.4;
+	ALPHA_ANTIALIASING_EDGE = 0.35;   // alpha-to-coverage w/ MSAA: no distant blade shimmer
 }

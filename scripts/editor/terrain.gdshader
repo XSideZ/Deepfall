@@ -4,10 +4,10 @@ render_mode cull_disabled;
 // Stylised (Subnautica / Planet Crafter style): the LOOK comes from vibrant flat colours
 // blended by height + slope. The photo textures are used only as faint luminance detail so
 // the surface isn't dead-flat, but never as the main look. Triplanar so cliffs don't stretch.
-uniform sampler2D tex_grass : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D tex_rock : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D tex_sand : source_color, filter_linear_mipmap, repeat_enable;
-uniform sampler2D tex_snow : source_color, filter_linear_mipmap, repeat_enable;
+uniform sampler2D tex_grass : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D tex_rock : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D tex_sand : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D tex_snow : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 
 uniform vec3 col_grass : source_color = vec3(0.63, 0.87, 0.13);   // luminous chartreuse (PC ref)
 uniform vec3 col_grass2 : source_color = vec3(0.49, 0.71, 0.09);  // warmer patch green

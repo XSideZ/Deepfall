@@ -55,11 +55,14 @@ func setup(mode: int) -> void:
 	mm.mesh = mesh
 	var n := int(radius * 2.0 / cell)
 	mm.instance_count = n * n
-	var half := float(n - 1) * 0.5
+	# offsets MUST be integer multiples of cell: half-cell offsets put every instance
+	# exactly on the round() boundary in the shader -> cell ids flickered with float
+	# jitter while moving and every clump re-rolled its look ("flashing grass")
+	var half := n / 2
 	for z in n:
 		for x in n:
 			mm.set_instance_transform(z * n + x,
-				Transform3D(Basis(), Vector3((float(x) - half) * cell, 0.0, (float(z) - half) * cell)))
+				Transform3D(Basis(), Vector3(float(x - half) * cell, 0.0, float(z - half) * cell)))
 	# instances get repositioned by the shader — keep a culling box that always covers them
 	mm.custom_aabb = AABB(Vector3(-radius - 8.0, -300.0, -radius - 8.0),
 		Vector3(radius * 2.0 + 16.0, 700.0, radius * 2.0 + 16.0))

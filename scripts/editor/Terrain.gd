@@ -306,7 +306,7 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			var lp := plat * plateau_levels
 			var pstep: float = floor(lp)
 			var pfrac: float = lp - pstep
-			var priser := smoothstep(0.68, 1.0, pfrac)   # wide riser = walkable curvy hill shoulders
+			var priser := smoothstep(0.56, 1.0, pfrac)   # wide riser = walkable curvy hill shoulders
 			var plateau_h: float = lerpf((pstep + priser) / plateau_levels, plat, 0.14)
 			# soft low-freq ridge crown so the highest shelves aren't perfectly table-flat
 			var r := 1.0 - absf(ridge.get_noise_2d(wx, wz))
@@ -329,10 +329,10 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			var rlp := region_v * float(num_tiers)
 			var rstep: float = floor(rlp)
 			var rfrac: float = rlp - rstep
-			var rriser := smoothstep(0.64, 0.99, rfrac)   # broad ramped cliff edge — climbable, still reads as a big step
+			var rriser := smoothstep(0.46, 1.0, rfrac)   # long ramped ascent — a real path up to each plateau
 			# valley passes: stretches of each cliff soften into a long climbable ramp
 			var pass_v := clampf(pass_n.get_noise_2d(fx, fz) * 0.5 + 0.5, 0.0, 1.0)
-			var pass_w := smoothstep(0.58, 0.74, pass_v)
+			var pass_w := smoothstep(0.52, 0.70, pass_v)   # more/wider valley routes
 			rriser = lerpf(rriser, rfrac, pass_w)
 			var tier_norm: float = (rstep + rriser) / float(num_tiers)
 			# scale the ladder by the quantized cliff-height field (0.7x .. 1.3x): whole

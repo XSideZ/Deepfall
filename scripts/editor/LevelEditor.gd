@@ -329,7 +329,7 @@ func _setup_environment() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 220.0   # mountains keep their shadows at range
 	sun.shadow_blur = 2.2                          # softer, friendlier shadow edges
-	sun.light_angular_distance = 1.7               # penumbra: soft "cartoon" shadow falloff
+	sun.light_angular_distance = 1.1               # gentle penumbra (higher was noisy/"tweaky" underwater)
 	add_child(sun)
 
 	_apply_sky()
@@ -532,28 +532,40 @@ func _setup_water() -> void:
 	add_child(underwater_bubbles)
 
 	# god-ray shafts (the ref-shot "light beams" — additive slanted planes, NOT ray
-	# tracing): a ring of tall Y-billboard quads that follow the camera underwater
+	# tracing). A generated gradient texture feathers every edge to zero so they read
+	# as columns of light, never as floating rectangles.
 	god_rays = Node3D.new()
 	god_rays.visible = false
 	add_child(god_rays)
+	var beam_img := Image.create(64, 256, false, Image.FORMAT_RGBA8)
+	for py in 256:
+		for px in 64:
+			var u := float(px) / 63.0
+			var v := float(py) / 255.0
+			# bright soft core falling to 0 at the sides; fades out toward the bottom
+			var core := pow(maxf(sin(u * PI), 0.0), 2.6)
+			var tall := (1.0 - v) * smoothstep(0.0, 0.12, v)   # soft top edge too
+			beam_img.set_pixel(px, py, Color(1, 1, 1, core * tall))
+	var beam_tex := ImageTexture.create_from_image(beam_img)
 	var ray_rng := RandomNumberGenerator.new()
 	ray_rng.seed = 60217
-	for i in 14:
+	for i in 12:
 		var q := MeshInstance3D.new()
 		var qm := QuadMesh.new()
-		qm.size = Vector2(ray_rng.randf_range(2.2, 5.0), 46.0)
+		qm.size = Vector2(ray_rng.randf_range(3.0, 6.5), 44.0)
+		qm.center_offset = Vector3(0, -22.0, 0)   # hangs DOWN from the surface anchor
 		q.mesh = qm
 		var rm := StandardMaterial3D.new()
 		rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		rm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		rm.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-		rm.albedo_color = Color(0.45, 0.85, 1.0, ray_rng.randf_range(0.030, 0.065))
-		rm.no_depth_test = false
+		rm.albedo_texture = beam_tex
+		rm.albedo_color = Color(0.45, 0.85, 1.0, ray_rng.randf_range(0.05, 0.10))
 		q.material_override = rm
 		q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var ang := ray_rng.randf() * TAU
-		q.position = Vector3(cos(ang), 0.0, sin(ang)) * ray_rng.randf_range(6.0, 26.0)
+		q.position = Vector3(cos(ang), 0.0, sin(ang)) * ray_rng.randf_range(6.0, 24.0)
 		q.rotation.z = deg_to_rad(ray_rng.randf_range(8.0, 16.0))   # slant like sun shafts
 		q.set_meta("phase", ray_rng.randf() * TAU)
 		god_rays.add_child(q)
@@ -1670,13 +1682,13 @@ func _update_weather(delta: float) -> void:
 		underwater_bubbles.global_position = cam3d.global_position + Vector3(0, -1.0, 0)
 		# shafts hang from the surface, drift slowly, breathe in brightness
 		if god_rays:
-			god_rays.global_position = Vector3(cam3d.global_position.x, _eff_water() - 20.0, cam3d.global_position.z)
+			god_rays.global_position = Vector3(cam3d.global_position.x, _eff_water(), cam3d.global_position.z)
 			var tnow := Time.get_ticks_msec() / 1000.0
 			for q in god_rays.get_children():
 				var qi := q as MeshInstance3D
 				var m := qi.material_override as StandardMaterial3D
 				var ph: float = qi.get_meta("phase", 0.0)
-				var base_a := 0.028 + 0.030 * (0.5 + 0.5 * sin(tnow * 0.35 + ph))
+				var base_a := 0.045 + 0.04 * (0.5 + 0.5 * sin(tnow * 0.35 + ph))
 				# rays live near the surface, die with depth + at night
 				var depth_k := clampf(1.0 - (_eff_water() - cam3d.global_position.y) / 30.0, 0.0, 1.0)
 				m.albedo_color.a = base_a * depth_k * (0.25 + 0.75 * _day_f)

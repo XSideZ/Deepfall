@@ -538,6 +538,9 @@ static func _depth_safe(m: BaseMaterial3D) -> void:
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	m.alpha_scissor_threshold = 0.45
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED   # leaf cards read from both sides
+	# alpha-to-coverage (uses the MSAA samples): distant canopies stop shimmering
+	m.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+	m.alpha_antialiasing_edge = 0.3
 
 func _variants(path: String, target_size: float) -> Array:
 	var out: Array = []
