@@ -25,8 +25,11 @@ var sea_root: Node3D
 
 # variant template pools (built once in setup)
 var rocks: Array = []
-var trees: Array = []          # living trees (bloom)
+var trees: Array = []          # living trees (bloom, away from shores)
 var dead_trees: Array = []     # bare/dead trees (barren world)
+var palms: Array = []          # shoreline trees (bloom, near water)
+var cacti: Array = []          # desert biome (alive even in the barren world)
+var blooms: Array = []         # desert bloom — harvestable fruit
 var crystals: Array = []
 var corals: Array = []
 var kelps: Array = []
@@ -50,6 +53,11 @@ func setup(p_editor) -> void:
 		_add_whole(trees, nat.get(f, ""), 7.5)
 	for f in ["DeadTree_1.fbx", "DeadTree_2.fbx", "DeadTree_3.fbx", "DeadTree_4.fbx", "DeadTree_5.fbx"]:
 		_add_whole(dead_trees, nat.get(f, ""), 6.0)
+	# desert + shoreline set (Jay's GLBs): palm sheet splits into its 5 trees
+	palms = _variants("res://assets/props/palm_trees.glb", 7.5)
+	_add_whole(cacti, "res://assets/props/cactus_a.glb", 2.1)
+	_add_whole(cacti, "res://assets/props/cactus_b.glb", 1.7)
+	_add_whole(blooms, "res://assets/props/desert_bloom.glb", 0.9)
 	_add_whole(crystals, CRYSTAL_PATH, 1.1)
 	for c in crystals:
 		_add_glow(c)
@@ -60,8 +68,8 @@ func setup(p_editor) -> void:
 	starfish = _variants(STARFISH_PATH, 0.45)
 	_add_whole(satellites, SAT_A_PATH, 2.8)
 	_add_whole(satellites, SAT_B_PATH, 2.8)
-	print("ResourceScatter pools: rocks=%d trees=%d dead=%d corals=%d starfish=%d kelp=%d crystals=%d" %
-		[rocks.size(), trees.size(), dead_trees.size(), corals.size(), starfish.size(), kelps.size(), crystals.size()])
+	print("ResourceScatter pools: rocks=%d trees=%d dead=%d palms=%d cacti=%d blooms=%d corals=%d starfish=%d kelp=%d crystals=%d" %
+		[rocks.size(), trees.size(), dead_trees.size(), palms.size(), cacti.size(), blooms.size(), corals.size(), starfish.size(), kelps.size(), crystals.size()])
 
 # --- rebuilds ------------------------------------------------------------------
 
@@ -72,18 +80,24 @@ func setup(p_editor) -> void:
 var live_candidates: Array = []   # { pos: Vector3, idx: int, spawned: bool }
 var dead_bodies: Array = []       # { body, pos: Vector2 }
 
+# veg_water: the waterline plant bands aim at (game passes the DESIGN sea level so
+# shorelines are right once the ocean fills; -999 = use water_level).
 func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
-		dead_count: int, sat_count: int, live_count: int, veg_max := 46.0) -> void:
+		dead_count: int, sat_count: int, live_count: int, veg_max := 46.0, veg_water := -999.0) -> void:
 	for n in land_root.get_children():
 		n.queue_free()
 	live_candidates.clear()
 	dead_bodies.clear()
+	var vw := water_level if veg_water < -900.0 else veg_water
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 913377
 	# one shared spacing set for EVERYTHING on land so no two props stack
 	var tree_pos: Array = []
 	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos)
 	_scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, tree_pos)
+	# the desert is ALIVE even in the barren world — cacti (graze) + blooms (fruit)
+	_scatter(terrain, rng, land_root, cacti, int(dead_count * 0.6), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
+	_scatter(terrain, rng, land_root, blooms, int(dead_count * 0.4), radius, "Fruit", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30), 1)
 	# dead trees across the whole barren island; remember each so the bloom can wither it
 	if not dead_trees.is_empty():
 		var placed := 0
@@ -96,6 +110,8 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			var z := sin(a) * d
 			if _too_close(Vector2(x, z), tree_pos, 3.2):
 				continue
+			if terrain.biome_at(x, z) < 0.28:
+				continue   # deserts get cacti, not dead trees
 			var h: float = terrain.height_at(x, z)
 			if h < water_level + 2.0 or h > veg_max or _slope_at(terrain, x, z) > 0.6:
 				continue
@@ -108,7 +124,8 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			body.global_position = Vector3(x, h - 0.45, z)
 			dead_bodies.append({ "body": body, "pos": Vector2(x, z) })
 			placed += 1
-	# pre-plan living-tree spots (not spawned yet — the bloom grows them in)
+	# pre-plan living-tree spots (not spawned yet — the bloom grows them in):
+	# normal trees inland + off-desert; PALMS own the shoreline band
 	if not trees.is_empty():
 		var tries := 0
 		while live_candidates.size() < live_count and tries < live_count * 22:
@@ -119,11 +136,31 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			var z := sin(a) * d
 			if _too_close(Vector2(x, z), tree_pos, 3.2):
 				continue
+			if terrain.biome_at(x, z) < 0.28:
+				continue
 			var h: float = terrain.height_at(x, z)
-			if h < water_level + 3.0 or h > veg_max or _slope_at(terrain, x, z) > 0.5:
+			if h < vw + 6.0 or h > veg_max or _slope_at(terrain, x, z) > 0.5:
 				continue
 			tree_pos.append(Vector2(x, z))
-			live_candidates.append({ "pos": Vector3(x, h - 0.45, z), "idx": rng.randi_range(0, trees.size() - 1), "spawned": false })
+			live_candidates.append({ "pos": Vector3(x, h - 0.45, z), "pool": "tree", "idx": rng.randi_range(0, trees.size() - 1), "spawned": false })
+	if not palms.is_empty():
+		var ptries := 0
+		var want_palms := int(live_count * 0.5)
+		var planned := 0
+		while planned < want_palms and ptries < want_palms * 26:
+			ptries += 1
+			var a := rng.randf() * TAU
+			var d := radius * sqrt(rng.randf())
+			var x := cos(a) * d
+			var z := sin(a) * d
+			if _too_close(Vector2(x, z), tree_pos, 3.4):
+				continue
+			var h: float = terrain.height_at(x, z)
+			if h < vw + 1.2 or h > vw + 6.0 or _slope_at(terrain, x, z) > 0.5:
+				continue
+			tree_pos.append(Vector2(x, z))
+			live_candidates.append({ "pos": Vector3(x, h - 0.35, z), "pool": "palm", "idx": rng.randi_range(0, palms.size() - 1), "spawned": false })
+			planned += 1
 
 ## Advance the living world out to `radius` from `origin`: sprout any living-tree
 ## candidate now inside the front, wither any dead tree it has overtaken.
@@ -149,7 +186,8 @@ func grow_front(origin: Vector2, radius: float, instant := false) -> void:
 func _sprout_live_tree(c: Dictionary, instant: bool) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(c.pos.x * 13.0 + c.pos.z * 71.0)
-	var body := _spawn(trees[int(c.idx)], "live", rng, Vector2(0.85, 1.35))
+	var pool: Array = palms if String(c.get("pool", "tree")) == "palm" else trees
+	var body := _spawn(pool[int(c.idx)], "live", rng, Vector2(0.85, 1.35))
 	body.set_meta("resource_type", "Wood")
 	body.set_meta("hits", 3)
 	_slim_tree_collider(body)
@@ -176,12 +214,19 @@ func rebuild_land(terrain, radius: float, water_level: float, rock_count: int, t
 	var occ: Array = []   # shared spacing set so nothing stacks
 	# rocks: anywhere on land off the beach
 	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, occ)
-	# living trees: only INSIDE the bloom, in the grass band, sunk in so slopes can't float them
-	_scatter(terrain, rng, land_root, trees, tree_count, radius, "Wood", water_level + 3.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
+	# living trees: inland + off-desert, inside the bloom; PALMS own the shoreline band
+	_scatter(terrain, rng, land_root, trees, tree_count, radius, "Wood", water_level + 6.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
+		bloom_center, bloom_radius, 1, occ, Vector2(0.28, 2.0))
+	_scatter(terrain, rng, land_root, palms, int(tree_count * 0.5), radius, "Wood", water_level + 1.2, water_level + 6.0, 0.5, Vector2(0.8, 1.3), -0.35,
 		bloom_center, bloom_radius, 1, occ)
+	# desert: cacti (graze) + desert blooms (fruit, picked in one hit)
+	_scatter(terrain, rng, land_root, cacti, int(tree_count * 0.6), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
+	_scatter(terrain, rng, land_root, blooms, int(tree_count * 0.4), radius, "Fruit", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30), 1)
 	# dead trees: OUTSIDE the bloom (the barren wastes); tolerate steeper/higher ground
 	_scatter(terrain, rng, land_root, dead_trees, dead_count, radius, "Wood", water_level + 2.0, veg_max, 0.6, Vector2(0.8, 1.4), -0.45,
-		bloom_center, bloom_radius, 2, occ)
+		bloom_center, bloom_radius, 2, occ, Vector2(0.28, 2.0))
 	# satellites: crash-landed debris (mixed designs) — the land source of Metal
 	_scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, occ)
 
@@ -272,7 +317,11 @@ func respawn_one(pos: Vector3, resource: String) -> void:
 		"Stone": pool = rocks
 		"Crystal", "Shard": pool = crystals
 		"Coral": pool = corals
-		"Biomass": pool = kelps if not kelps.is_empty() else starfish
+		"Fruit": pool = blooms
+		"Biomass":
+			# on land biomass regrows as cacti; underwater as kelp/starfish
+			var in_desert: bool = editor and editor.terrain and pos.y > editor.water_level
+			pool = cacti if in_desert and not cacti.is_empty() else (kelps if not kelps.is_empty() else starfish)
 		"Metal": pool = satellites
 	if pool.is_empty():
 		return
@@ -280,7 +329,7 @@ func respawn_one(pos: Vector3, resource: String) -> void:
 	rng.seed = randi()
 	var body := _spawn(pool[rng.randi_range(0, pool.size() - 1)], resource.to_lower() + "_re", rng, Vector2(0.8, 1.4))
 	body.set_meta("resource_type", resource)
-	body.set_meta("hits", 3)
+	body.set_meta("hits", 1 if resource == "Fruit" else 3)
 	if resource == "Wood":
 		_slim_tree_collider(body)
 	land_root.add_child(body)
@@ -303,7 +352,7 @@ func clear() -> void:
 
 func _exit_tree() -> void:
 	# template pools live outside the scene tree, so they must be freed manually
-	for pool in [rocks, trees, dead_trees, crystals, corals, kelps, starfish, satellites]:
+	for pool in [rocks, trees, dead_trees, palms, cacti, blooms, crystals, corals, kelps, starfish, satellites]:
 		for t in pool:
 			if is_instance_valid(t):
 				t.free()
@@ -312,9 +361,11 @@ func _exit_tree() -> void:
 
 # bloom_mode: 0 ignore, 1 INSIDE the bloom only, 2 OUTSIDE the bloom only.
 # occupied: a SHARED position list so different resource types don't stack on each other.
+# biome_rng: only place where terrain.biome_at falls in this range (desert <0.3, etc).
 func _scatter(terrain, rng: RandomNumberGenerator, parent: Node3D, pool: Array, count: int, radius: float,
 		resource: String, min_h: float, max_h: float, max_slope: float, scale_range: Vector2, sink: float,
-		bloom_center := Vector2.ZERO, bloom_radius := 1.0e9, bloom_mode := 0, occupied = null) -> void:
+		bloom_center := Vector2.ZERO, bloom_radius := 1.0e9, bloom_mode := 0, occupied = null,
+		biome_rng := Vector2(-1.0, 2.0), hits := 3) -> void:
 	if pool.is_empty() or count <= 0:
 		return
 	var min_space := 3.2 if resource == "Wood" else 2.2   # keep resources from stacking
@@ -333,6 +384,9 @@ func _scatter(terrain, rng: RandomNumberGenerator, parent: Node3D, pool: Array, 
 				continue
 			if bloom_mode == 2 and dseed < bloom_radius:
 				continue
+		var bio: float = terrain.biome_at(x, z)
+		if bio < biome_rng.x or bio > biome_rng.y:
+			continue
 		if _too_close(Vector2(x, z), placed_pos, min_space):
 			continue
 		var h: float = terrain.height_at(x, z)
@@ -344,7 +398,7 @@ func _scatter(terrain, rng: RandomNumberGenerator, parent: Node3D, pool: Array, 
 		var idx := rng.randi_range(0, pool.size() - 1)
 		var body := _spawn(pool[idx], resource.to_lower() + str(idx), rng, scale_range)
 		body.set_meta("resource_type", resource)
-		body.set_meta("hits", 3)
+		body.set_meta("hits", hits)
 		if resource == "Wood":
 			_slim_tree_collider(body)   # collide with the TRUNK, not the whole canopy
 		parent.add_child(body)
@@ -459,13 +513,15 @@ func _slim_tree_collider(body: StaticBody3D) -> void:
 		if c is CollisionShape3D and (c as CollisionShape3D).shape is BoxShape3D:
 			var cs := c as CollisionShape3D
 			var b := cs.shape as BoxShape3D
-			# ~half the canopy width, forgiving (min 0.9) so bare/leaning trees are still
+			# ~half the canopy width, forgiving (min 1.1) so bare/leaning trees are still
 			# easy to hit, but capped (max 1.6) so it's not a full-canopy invisible wall.
-			# KEEP the collider on the visual centre — don't slam it to the body origin,
-			# which threw asymmetric ("red"/dead) trees' hitboxes off to the side.
 			var slim := BoxShape3D.new()
-			slim.size = Vector3(clampf(b.size.x * 0.5, 0.9, 1.6), b.size.y, clampf(b.size.z * 0.5, 0.9, 1.6))
+			slim.size = Vector3(clampf(b.size.x * 0.5, 1.1, 1.6), b.size.y, clampf(b.size.z * 0.5, 1.1, 1.6))
 			cs.shape = slim
+			# GROUND the box (bottom at y=0) and pull it halfway toward the body origin:
+			# the fitted AABB centre sits up in the canopy, so the TRUNK — at ground
+			# level, near the origin — wasn't registering hits on dead/leaning trees.
+			cs.position = Vector3(cs.position.x * 0.5, slim.size.y * 0.5, cs.position.z * 0.5)
 
 func _too_close(p: Vector2, placed: Array, d: float) -> bool:
 	var d2 := d * d

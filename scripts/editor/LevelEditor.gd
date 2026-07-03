@@ -75,6 +75,7 @@ const RES_COLORS := {
 	"Stone": Color(0.72, 0.72, 0.75), "Wood": Color(0.65, 0.42, 0.22),
 	"Crystal": Color(0.45, 0.90, 1.0), "Coral": Color(1.0, 0.55, 0.45),
 	"Biomass": Color(0.50, 1.0, 0.60), "Metal": Color(0.80, 0.82, 0.90),
+	"Shard": Color(1.0, 0.22, 0.14), "Fruit": Color(1.0, 0.52, 0.62),
 }
 const INV_BASE := 20
 var inv_capacity := 20           # +8 per Storage sac room
@@ -1352,10 +1353,19 @@ func _update_survival(delta: float) -> void:
 	# depleted meters slow the vessel down
 	player.speed_mult = 0.55 if (sap <= 0.5 or lux <= 0.5 or bio <= 0.5) else 1.0
 
-## G: consume 1 Biomass to restore nutrients.
+## G: eat. Desert fruit first (rich — nutrients AND water), else raw Biomass.
 func _graze() -> void:
+	if _type_total("Fruit") >= 1:
+		_consume_type("Fruit", 1)
+		bio = minf(bio + 52.0, 100.0)
+		sap = minf(sap + 14.0, 100.0)
+		_update_inv_pod("Fruit")
+		if audio:
+			audio.play("chime")
+		_flash("Desert bloom — sweet with stored water")
+		return
 	if _type_total("Biomass") < 1:
-		_flash("No Biomass to absorb — harvest kelp or starfish")
+		_flash("Nothing to eat — pick desert blooms or harvest kelp / cacti")
 		return
 	_consume_type("Biomass", 1)
 	bio = minf(bio + 40.0, 100.0)
@@ -2350,9 +2360,12 @@ func scatter_barren_world() -> void:
 		return
 	var map_r := grid_size * 0.5
 	var mul := _area_mult()
+	# vegetation bands aim at the DESIGN sea level in game mode (the ocean isn't
+	# born yet, but palms/shore plants must be right once it fills)
+	var veg_water := 8.0 if game_mode else maxf(water_level, 0.0)
 	resource_scatter.scatter_barren(terrain, map_r, maxf(water_level, 0.0),
 		int(rock_count * mul), int((tree_count + 8) * mul), int(satellite_count * mul), int(tree_count * mul),
-		_terrain_amplitude() * 1.35)
+		_terrain_amplitude() * 1.35, veg_water)
 	if flora:
 		flora.clear()
 

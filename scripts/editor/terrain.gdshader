@@ -21,7 +21,7 @@ uniform vec3 col_snow : source_color = vec3(0.93, 0.95, 0.99);
 uniform sampler2D biome_map : filter_linear;
 uniform float terrain_span = 512.0;
 uniform float snow_amount = 0.0;
-uniform vec3 col_grass_desert : source_color = vec3(0.84, 0.73, 0.42);  // dry golden savanna
+uniform vec3 col_grass_desert : source_color = vec3(0.88, 0.77, 0.52);  // desert sand (a shade deeper than beach sand -> they blend)
 uniform vec3 col_grass_jungle : source_color = vec3(0.19, 0.53, 0.13);  // deep saturated jungle
 uniform vec3 col_rock_grey : source_color = vec3(0.50, 0.50, 0.54);     // grey cliff stone
 
@@ -87,7 +87,7 @@ void fragment() {
 	vec3 grass_col = mix(col_grass2, col_grass, smoothstep(0.30, 0.70, macro));
 	// biome tint: golden desert <- chartreuse plains -> deep jungle green
 	float bio = texture(biome_map, (v_wpos.xz + terrain_span * 0.5) / terrain_span).r;
-	grass_col = mix(col_grass_desert, grass_col, smoothstep(0.16, 0.40, bio));
+	grass_col = mix(col_grass_desert, grass_col, smoothstep(0.24, 0.44, bio));
 	grass_col = mix(grass_col, col_grass_jungle, smoothstep(0.58, 0.82, bio));
 	// detail centred on 1.0 so texture variation never darkens the palette overall
 	float clump_d = 1.0 + (smoothstep(0.28, 0.72, clump) - 0.5) * 0.34;

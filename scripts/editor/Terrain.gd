@@ -120,6 +120,15 @@ func height_texture() -> ImageTexture:
 		hm_dirty = false
 	return _hm_tex
 
+## Biome value at a world position (0 desert .. 0.5 plains .. 1 jungle).
+func biome_at(wx: float, wz: float) -> float:
+	var side := grid + 1
+	if biomes.size() != side * side:
+		return 0.5
+	var x := clampi(int(round(wx + grid * 0.5)), 0, grid)
+	var z := clampi(int(round(wz + grid * 0.5)), 0, grid)
+	return biomes[z * side + x]
+
 ## Biome weights as an RF texture (0 desert .. 0.5 plains .. 1 jungle) for the shader.
 func biome_texture() -> ImageTexture:
 	var side := grid + 1
@@ -200,7 +209,7 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 	var biome_n := FastNoiseLite.new()
 	biome_n.seed = noise_seed + 907
 	biome_n.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	biome_n.frequency = frequency * 0.32
+	biome_n.frequency = frequency * 0.45
 	biome_n.fractal_octaves = 2
 	# PLATEAU field (low freq, smooth): quantized into distinct flat shelves that step up
 	# the highlands with steep cliffs between them (buildable elevated spots)
@@ -249,7 +258,10 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			# biome weights — highlands are a MINORITY (Jay: not >50% mountain). Most of the
 			# map is gently-shelved plains; jungle highlands are the rarer tall regions.
 			var b01 := clampf(biome_n.get_noise_2d(fx, fz) * 0.5 + 0.5, 0.0, 1.0)
-			var w_desert := smoothstep(0.38, 0.16, b01)
+			# stretch contrast: simplex is centre-heavy, so without this many seeds never
+			# reach the desert/jungle tails at all
+			b01 = clampf((b01 - 0.5) * 1.8 + 0.5, 0.0, 1.0)
+			var w_desert := smoothstep(0.44, 0.24, b01)   # ~quarter of the map runs desert
 			var w_jungle := smoothstep(0.58, 0.80, b01)
 			var w_plain: float = clampf(1.0 - w_desert - w_jungle, 0.0, 1.0)
 
