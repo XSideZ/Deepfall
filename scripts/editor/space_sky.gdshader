@@ -79,6 +79,22 @@ void sky() {
 			+ star_layer(dir, 150.0, star_threshold + 0.003) * 1.3;
 	col += vec3(s) * star_fade * 0.7;
 
+	// painterly clouds: two drifting fbm layers, flat-bottomed puffs (PC/stylized ref).
+	// brightness follows daylight (sky_lum) so night clouds go dim, dawn clouds warm.
+	float sky_lum = clamp(dot(space_bottom, vec3(0.5)), 0.0, 1.0);
+	if (dir.y > 0.02) {
+		vec2 cuv = dir.xz / (dir.y + 0.18);   // project onto a virtual cloud plane
+		float t = TIME * 0.006;
+		float c1 = fbm3(vec3(cuv * 0.55 + vec2(t, t * 0.6), 3.0));
+		float c2 = fbm3(vec3(cuv * 1.35 - vec2(t * 1.7, t), 11.0));
+		float cd = smoothstep(0.52, 0.70, c1 * 0.72 + c2 * 0.38);
+		cd *= smoothstep(0.02, 0.16, dir.y);              // fade at the horizon line
+		vec3 cloud_lit = mix(vec3(0.30, 0.34, 0.46), vec3(1.05, 1.03, 1.0), sky_lum);
+		cloud_lit = mix(cloud_lit, sun_color * 1.05, pow(sd, 8.0) * 0.5);  // sun-kissed edges
+		float shade = 1.0 - smoothstep(0.55, 0.95, c2) * 0.28;             // soft underbellies
+		col = mix(col, cloud_lit * shade, cd * 0.85);
+	}
+
 	// planet
 	vec3 pd = normalize(planet_dir);
 	float dd = dot(dir, pd);

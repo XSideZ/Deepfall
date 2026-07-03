@@ -285,6 +285,13 @@ func _setup_environment() -> void:
 	# soft contact shadows ground the props/terrain
 	env.ssao_enabled = true
 	env.ssao_intensity = 1.5
+	# screen-space bounce light: grass glows green near grass, warmth pools in valleys
+	env.ssil_enabled = true
+	env.ssil_intensity = 1.1
+	# punchier stylized grade (Planet Crafter ref): saturated colours, gentle contrast
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.14
+	env.adjustment_contrast = 1.03
 
 	# global distance fog (OFF by default; toggle in the Fog panel). Tuned as sky-tinted
 	# aerial haze: distant land fades toward the horizon colour, sky stays crisp.
@@ -306,6 +313,7 @@ func _setup_environment() -> void:
 	add_child(world_env)
 
 	sun = DirectionalLight3D.new()
+	sun.light_volumetric_fog_energy = 3.2   # strong underwater god rays
 	sun.rotation_degrees = Vector3(-52, -42, 0)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 220.0   # mountains keep their shadows at range
@@ -473,8 +481,8 @@ func _setup_water() -> void:
 
 	# rising bubbles, shown only while the camera is submerged (follows the camera)
 	underwater_bubbles = GPUParticles3D.new()
-	underwater_bubbles.amount = 90
-	underwater_bubbles.lifetime = 3.5
+	underwater_bubbles.amount = 140
+	underwater_bubbles.lifetime = 4.5
 	underwater_bubbles.emitting = false
 	underwater_bubbles.local_coords = false
 	underwater_bubbles.visibility_aabb = AABB(Vector3(-12, -4, -12), Vector3(24, 30, 24))
@@ -486,17 +494,21 @@ func _setup_water() -> void:
 	bpm.initial_velocity_min = 0.4
 	bpm.initial_velocity_max = 1.1
 	bpm.gravity = Vector3(0, 0.6, 0)
-	bpm.scale_min = 0.4
-	bpm.scale_max = 1.4
+	bpm.scale_min = 0.7
+	bpm.scale_max = 2.6
 	underwater_bubbles.process_material = bpm
 	var bmesh := SphereMesh.new()
-	bmesh.radius = 0.035
-	bmesh.height = 0.07
+	bmesh.radius = 0.045
+	bmesh.height = 0.09
 	var bmat := StandardMaterial3D.new()
-	bmat.albedo_color = Color(0.8, 0.95, 1.0, 0.35)
+	bmat.albedo_color = Color(0.8, 0.95, 1.0, 0.45)
 	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	bmat.roughness = 0.1
+	bmat.roughness = 0.05
 	bmat.rim_enabled = true
+	bmat.rim = 1.0
+	bmat.emission_enabled = true
+	bmat.emission = Color(0.5, 0.85, 1.0)
+	bmat.emission_energy_multiplier = 0.35
 	bmesh.material = bmat
 	underwater_bubbles.draw_pass_1 = bmesh
 	add_child(underwater_bubbles)
@@ -810,16 +822,16 @@ func _update_underwater() -> void:
 	_underwater = below
 	var env := world_env.environment
 	if _underwater:
-		# deep turquoise depth fog + volumetric god rays slanting down through the water
+		# turquoise depth fog (graded per frame in _update_weather) + god-ray volumetrics
 		env.fog_enabled = true
-		env.fog_density = 0.05
-		env.fog_light_color = Color(0.09, 0.40, 0.52)
+		env.fog_density = 0.045
+		env.fog_light_color = Color(0.10, 0.46, 0.58)
 		env.fog_sun_scatter = 0.0
 		env.volumetric_fog_enabled = true
-		env.volumetric_fog_density = 0.05
-		env.volumetric_fog_albedo = Color(0.25, 0.7, 0.85)
-		env.volumetric_fog_emission = Color(0.05, 0.25, 0.35)
-		env.volumetric_fog_length = 120.0
+		env.volumetric_fog_density = 0.07
+		env.volumetric_fog_albedo = Color(0.30, 0.75, 0.88)
+		env.volumetric_fog_emission = Color(0.04, 0.22, 0.32)
+		env.volumetric_fog_length = 140.0
 		if underwater_bubbles:
 			underwater_bubbles.emitting = true
 	else:
@@ -1597,6 +1609,12 @@ func _update_weather(delta: float) -> void:
 	var cam3d := get_viewport().get_camera_3d()
 	if _underwater and underwater_bubbles and cam3d:
 		underwater_bubbles.global_position = cam3d.global_position + Vector3(0, -1.0, 0)
+		# depth grading: bright turquoise near the surface -> dark deep blue below
+		var dep := clampf((_eff_water() - cam3d.global_position.y) / 26.0, 0.0, 1.0)
+		var env := world_env.environment
+		env.fog_density = lerpf(0.032, 0.075, dep)
+		env.fog_light_color = Color(0.14, 0.55, 0.66).lerp(Color(0.02, 0.10, 0.22), dep)
+		env.volumetric_fog_density = lerpf(0.085, 0.03, dep)   # rays strongest near the light
 	if rain_fx and cam3d:
 		rain_fx.global_position = cam3d.global_position + Vector3(0, 4.0, 0)
 		if rain_splash and terrain:

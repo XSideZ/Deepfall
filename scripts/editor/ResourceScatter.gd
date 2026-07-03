@@ -511,7 +511,9 @@ func _add_whole(pool: Array, path: String, target_size: float) -> void:
 
 ## Imported vegetation often arrives with TRANSPARENT leaf materials. Transparent
 ## geometry skips the depth buffer, so the water plane (render_priority 2) painted
-## straight over trees/hills. Stylized-kit textures are solid — force them opaque.
+## straight over trees/hills. ALPHA SCISSOR is the foliage answer: writes depth
+## (water sorts correctly) but still CLIPS the see-through leaf texels — plain
+## "opaque" rendered them as solid black shards.
 static func force_opaque(n: Node) -> void:
 	if n is MeshInstance3D:
 		var mi := n as MeshInstance3D
@@ -520,15 +522,22 @@ static func force_opaque(n: Node) -> void:
 		for i in mi.get_surface_override_material_count():
 			var mo := mi.get_surface_override_material(i)
 			if mo is BaseMaterial3D:
-				(mo as BaseMaterial3D).transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+				_depth_safe(mo as BaseMaterial3D)
 	for c in n.get_children():
 		force_opaque(c)
 
 static func opaque_mesh(mesh: Mesh) -> void:
 	for s in mesh.get_surface_count():
 		var m := mesh.surface_get_material(s)
-		if m is BaseMaterial3D and (m as BaseMaterial3D).transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
-			(m as BaseMaterial3D).transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+		if m is BaseMaterial3D:
+			_depth_safe(m as BaseMaterial3D)
+
+static func _depth_safe(m: BaseMaterial3D) -> void:
+	if m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+		return
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	m.alpha_scissor_threshold = 0.45
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED   # leaf cards read from both sides
 
 func _variants(path: String, target_size: float) -> Array:
 	var out: Array = []

@@ -60,4 +60,15 @@ void fragment() {
 	METALLIC = 0.0;
 	SPECULAR = 1.0;
 	ALPHA = max(mix(shallow_alpha, 1.0, depth), shore * 0.9);
+
+	// seen from BELOW: the surface becomes a bright animated ceiling — ripple noise
+	// turns into shimmering light patches with a hot spot around the sun overhead
+	if (!FRONT_FACING) {
+		float shimmer = clamp((na.z + nb.z) * 0.5 + 0.5, 0.0, 1.0);
+		vec3 ceil_col = mix(vec3(0.10, 0.42, 0.55), vec3(0.55, 0.95, 1.0), pow(shimmer, 2.2));
+		float up_fres = pow(1.0 - facing, 2.0);
+		ALBEDO = ceil_col * day_mult * (1.0 + up_fres * 1.6);
+		EMISSION = ceil_col * day_mult * pow(shimmer, 4.0) * 0.9;
+		ALPHA = 0.85;
+	}
 }

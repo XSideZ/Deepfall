@@ -156,6 +156,18 @@ void fragment() {
 		detail *= 1.0 + (smoothstep(0.35, 0.65, micro) - 0.5) * 0.38 * close_f;
 	}
 
+	// CAUSTICS: dancing light webs on everything underwater — two scrolling noise
+	// fields, max-sharpened so thin bright ridges form; fade out with depth
+	float under = smoothstep(water_level + 0.3, water_level - 0.8, h);
+	if (under > 0.01) {
+		vec2 cuv = v_wpos.xz;
+		float ca = tri_luma(tex_snow, v_wpos + vec3(TIME * 1.3, 0.0, TIME * 0.9), wnrm, 0.35);
+		float cb = tri_luma(tex_snow, v_wpos - vec3(TIME * 1.1, 0.0, TIME * 1.5), wnrm, 0.30);
+		float web = pow(clamp(1.0 - abs(ca - cb) * 4.0, 0.0, 1.0), 3.0);
+		float depth_fade = smoothstep(water_level - 26.0, water_level - 3.0, h) * 0.6 + 0.15;
+		detail *= 1.0 + web * under * depth_fade * 0.9;
+	}
+
 	ALBEDO = base * detail;
 	ROUGHNESS = 0.9;
 	SPECULAR = 0.2;
