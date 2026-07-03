@@ -60,6 +60,7 @@ var rain_timer: Timer
 var rain_fx: GPUParticles3D
 var rain_splash: GPUParticles3D
 var underwater_bubbles: GPUParticles3D
+var god_rays: Node3D
 var _rain_mix := 0.0
 var _last_eff_water := -1e9
 
@@ -327,7 +328,8 @@ func _setup_environment() -> void:
 	sun.rotation_degrees = Vector3(-52, -42, 0)
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 220.0   # mountains keep their shadows at range
-	sun.shadow_blur = 1.4                          # softer, friendlier shadow edges
+	sun.shadow_blur = 2.2                          # softer, friendlier shadow edges
+	sun.light_angular_distance = 1.7               # penumbra: soft "cartoon" shadow falloff
 	add_child(sun)
 
 	_apply_sky()
@@ -528,6 +530,33 @@ func _setup_water() -> void:
 	bmesh.material = bmat
 	underwater_bubbles.draw_pass_1 = bmesh
 	add_child(underwater_bubbles)
+
+	# god-ray shafts (the ref-shot "light beams" — additive slanted planes, NOT ray
+	# tracing): a ring of tall Y-billboard quads that follow the camera underwater
+	god_rays = Node3D.new()
+	god_rays.visible = false
+	add_child(god_rays)
+	var ray_rng := RandomNumberGenerator.new()
+	ray_rng.seed = 60217
+	for i in 14:
+		var q := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2(ray_rng.randf_range(2.2, 5.0), 46.0)
+		q.mesh = qm
+		var rm := StandardMaterial3D.new()
+		rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		rm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		rm.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+		rm.albedo_color = Color(0.45, 0.85, 1.0, ray_rng.randf_range(0.030, 0.065))
+		rm.no_depth_test = false
+		q.material_override = rm
+		q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var ang := ray_rng.randf() * TAU
+		q.position = Vector3(cos(ang), 0.0, sin(ang)) * ray_rng.randf_range(6.0, 26.0)
+		q.rotation.z = deg_to_rad(ray_rng.randf_range(8.0, 16.0))   # slant like sun shafts
+		q.set_meta("phase", ray_rng.randf() * TAU)
+		god_rays.add_child(q)
 
 func _setup_brush_ring() -> void:
 	brush_ring = MeshInstance3D.new()
@@ -848,16 +877,22 @@ func _update_underwater() -> void:
 		env.volumetric_fog_albedo = Color(0.30, 0.75, 0.88)
 		env.volumetric_fog_emission = Color(0.04, 0.22, 0.32)
 		env.volumetric_fog_length = 140.0
+		env.ssil_enabled = false   # screen-space GI smears swaying seagrass into moving blobs
 		if underwater_bubbles:
 			underwater_bubbles.emitting = true
+		if god_rays:
+			god_rays.visible = true
 	else:
 		env.fog_enabled = fog_enabled_setting
 		env.fog_density = fog_density_setting
 		env.fog_light_color = Color(0.70, 0.85, 0.95)
 		env.fog_sun_scatter = 0.12
 		env.volumetric_fog_density = 0.0
+		env.ssil_enabled = true
 		if underwater_bubbles:
 			underwater_bubbles.emitting = false
+		if god_rays:
+			god_rays.visible = false
 
 func _on_local_fog_size(v: float) -> void:
 	local_fog_size = v
@@ -1633,6 +1668,18 @@ func _update_weather(delta: float) -> void:
 			sea_carpet.follow(cam3d.global_position, _eff_water())
 	if _underwater and underwater_bubbles and cam3d:
 		underwater_bubbles.global_position = cam3d.global_position + Vector3(0, -1.0, 0)
+		# shafts hang from the surface, drift slowly, breathe in brightness
+		if god_rays:
+			god_rays.global_position = Vector3(cam3d.global_position.x, _eff_water() - 20.0, cam3d.global_position.z)
+			var tnow := Time.get_ticks_msec() / 1000.0
+			for q in god_rays.get_children():
+				var qi := q as MeshInstance3D
+				var m := qi.material_override as StandardMaterial3D
+				var ph: float = qi.get_meta("phase", 0.0)
+				var base_a := 0.028 + 0.030 * (0.5 + 0.5 * sin(tnow * 0.35 + ph))
+				# rays live near the surface, die with depth + at night
+				var depth_k := clampf(1.0 - (_eff_water() - cam3d.global_position.y) / 30.0, 0.0, 1.0)
+				m.albedo_color.a = base_a * depth_k * (0.25 + 0.75 * _day_f)
 		# depth grading: bright turquoise near the surface -> dark deep blue below
 		var dep := clampf((_eff_water() - cam3d.global_position.y) / 26.0, 0.0, 1.0)
 		var env := world_env.environment

@@ -6,16 +6,16 @@ extends MultiMeshInstance3D
 const ResourceScatterScript := preload("res://scripts/editor/ResourceScatter.gd")
 const CarpetShader := preload("res://scripts/editor/carpet.gdshader")
 
-var cell := 0.62
-var radius := 40.0
+var cell := 0.68
+var radius := 54.0
 var mat: ShaderMaterial
 
 ## mode 0 = land grass, 1 = sea grass.
 func setup(mode: int) -> void:
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if mode == 1:
-		cell = 0.85
-		radius = 34.0
+		cell = 0.95
+		radius = 42.0
 
 	# clump mesh + its albedo texture from the nature pack
 	var nat: Dictionary = ResourceScatterScript.nature_index()
@@ -46,8 +46,8 @@ func setup(mode: int) -> void:
 	mat.set_shader_parameter("cell", cell)
 	mat.set_shader_parameter("base_scale", (0.5 if mode == 0 else 0.62) / maxf(ab.size.y, 0.001))
 	mat.set_shader_parameter("mesh_h", ab.size.y)
-	mat.set_shader_parameter("fade_start", radius * 0.72)
-	mat.set_shader_parameter("fade_end", radius)
+	mat.set_shader_parameter("fade_start", radius * 0.55)
+	mat.set_shader_parameter("fade_end", radius * 0.96)
 	material_override = mat
 
 	var mm := MultiMesh.new()

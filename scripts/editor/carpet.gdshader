@@ -74,8 +74,14 @@ void vertex() {
 		g = g * g * (3.0 - 2.0 * g);
 	}
 
-	// distance fade (the terrain's grass-coloured ground takes over beyond)
-	float cd = distance(wxz, CAMERA_POSITION_WORLD.xz);
+	// organic drifts: patch noise carves gaps + density waves (ref spacing, not a lawn-grid)
+	float patch = hashc(floor(cid * 0.16) + 5.1);
+	float patch2 = hashc(floor(cid * 0.05) + 57.9);
+	if (patch * 0.6 + patch2 * 0.4 < 0.22) { ok = 0.0; }
+
+	// distance fade, DITHERED per clump (each fades at its own distance -> no visible
+	// ring of grass popping in and out as you walk)
+	float cd = distance(wxz, CAMERA_POSITION_WORLD.xz) + (h1 - 0.5) * 14.0;
 	float df = 1.0 - smoothstep(fade_start, fade_end, cd);
 
 	float sc = (0.72 + h2 * 0.55) * base_scale * ok * g * df;
@@ -125,7 +131,9 @@ void fragment() {
 	}
 	ALBEDO = col;
 	if (mode == 1) {
-		EMISSION = col * (0.10 + v_extra * 0.22);   // underwater pop
+		// near-zero emission: bright ALBEDO does the pop — real emission made the
+		// screen-space GI smear moving light blobs ("shadows moving all over")
+		EMISSION = col * (0.02 + v_extra * 0.05);
 	}
 	ROUGHNESS = 0.9;
 	SPECULAR = 0.15;
