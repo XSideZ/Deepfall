@@ -581,14 +581,23 @@ func _variants_nodes(path: String, target_size: float) -> Array:
 		hs.append(ab.size.y)
 		max_h = maxf(max_h, ab.size.y)
 	for i in found.size():
+		var mesh: Mesh = found[i][0]
+		var b: Basis = (found[i][1] as Transform3D).basis
+		# fit + ground using the TRANSFORMED AABB — _autofit reads the raw mesh AABB,
+		# which is wrong for GLB nodes carrying rotation/scale (palms floated off the sand)
+		var ab: AABB = Transform3D(b, Vector3.ZERO) * mesh.get_aabb()
+		var m: float = maxf(ab.size.x, maxf(ab.size.y, ab.size.z))
+		var rel: float = clampf(hs[i] / maxf(max_h, 0.001), 0.2, 1.0)
+		var fit_s: float = (target_size * rel) / maxf(m, 0.001)
 		var mi := MeshInstance3D.new()
-		mi.mesh = found[i][0]
-		mi.transform = Transform3D((found[i][1] as Transform3D).basis, Vector3.ZERO)
+		mi.mesh = mesh
+		# scaled, rotated, and positioned so the model's centre is at the origin with
+		# its AABB bottom resting exactly on y=0
+		mi.transform = Transform3D(b.scaled(Vector3(fit_s, fit_s, fit_s)),
+			Vector3(-ab.get_center().x, -ab.position.y, -ab.get_center().z) * fit_s)
 		var holder := Node3D.new()
 		holder.add_child(mi)
 		force_opaque(holder)
-		var rel: float = clampf(hs[i] / maxf(max_h, 0.001), 0.2, 1.0)
-		_autofit(mi, target_size * rel)
 		out.append(holder)
 	inst.free()
 	return out
