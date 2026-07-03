@@ -247,14 +247,22 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 	var rrng := RandomNumberGenerator.new()
 	rrng.seed = noise_seed + 99
 	var half_g := grid * 0.5
-	var desert_c := Vector2(rrng.randf_range(-0.5, 0.5), rrng.randf_range(-0.5, 0.5)) * half_g
-	var ice_c := desert_c
-	for i in 30:
-		ice_c = Vector2(rrng.randf_range(-0.5, 0.5), rrng.randf_range(-0.5, 0.5)) * half_g
-		if ice_c.distance_to(desert_c) > half_g * 0.85:
-			break
-	var desert_r := half_g * rrng.randf_range(0.46, 0.55)   # ~quarter of the map
-	var ice_r := half_g * rrng.randf_range(0.40, 0.48)
+	# desert and ice sit on OPPOSITE sides of the island, and their radii are capped
+	# so a guaranteed plains/jungle belt always runs between them (no thin slits)
+	var d_ang := rrng.randf() * TAU
+	var desert_c := Vector2.from_angle(d_ang) * half_g * rrng.randf_range(0.48, 0.56)
+	var ice_c := Vector2.from_angle(d_ang + PI + rrng.randf_range(-0.30, 0.30)) * half_g * rrng.randf_range(0.48, 0.56)
+	# minimum belt of green between the two — sized so that even after the ±33m edge
+	# noise pushes lobes in from both sides, a real corridor survives
+	var corridor := half_g * 0.46
+	# split the available span FAIRLY (desert slightly bigger) so ice never ends up
+	# with just the leftover scraps
+	var budget: float = maxf(desert_c.distance_to(ice_c) - corridor, half_g * 0.56)
+	var desert_r: float = clampf(budget * rrng.randf_range(0.50, 0.56), half_g * 0.26, half_g * 0.55)
+	var ice_r: float = clampf(budget - desert_r, half_g * 0.30, half_g * 0.50)
+	# blend band scales with each region so small regions keep a full-strength core
+	var d_band: float = minf(45.0, desert_r * 0.35)
+	var i_band: float = minf(45.0, ice_r * 0.35)
 
 	biomes = PackedFloat32Array()
 	biomes.resize((grid + 1) * (grid + 1))
@@ -281,8 +289,8 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			var pv2 := Vector2(fx - half, fz - half)
 			var edge_n := biome_n.get_noise_2d(fx * 0.9, fz * 0.9) * 24.0 \
 				+ biome_n.get_noise_2d(fx * 3.5, fz * 3.5) * 9.0
-			var w_desert := 1.0 - smoothstep(desert_r - 45.0, desert_r + 15.0, pv2.distance_to(desert_c) + edge_n)
-			var w_ice := 1.0 - smoothstep(ice_r - 45.0, ice_r + 15.0, pv2.distance_to(ice_c) + edge_n)
+			var w_desert := 1.0 - smoothstep(desert_r - d_band, desert_r + 15.0, pv2.distance_to(desert_c) + edge_n)
+			var w_ice := 1.0 - smoothstep(ice_r - i_band, ice_r + 15.0, pv2.distance_to(ice_c) + edge_n)
 			w_desert *= 1.0 - w_ice   # ice wins any overlap (they're seeded far apart)
 			var w_jungle := smoothstep(0.58, 0.80, b01) * (1.0 - w_desert) * (1.0 - w_ice)
 			var w_plain: float = clampf(1.0 - w_desert - w_jungle - w_ice, 0.0, 1.0)
@@ -298,7 +306,7 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			var lp := plat * plateau_levels
 			var pstep: float = floor(lp)
 			var pfrac: float = lp - pstep
-			var priser := smoothstep(0.86, 0.99, pfrac)
+			var priser := smoothstep(0.80, 1.0, pfrac)   # wider riser = curvier hill shoulders
 			var plateau_h: float = lerpf((pstep + priser) / plateau_levels, plat, 0.14)
 			# soft low-freq ridge crown so the highest shelves aren't perfectly table-flat
 			var r := 1.0 - absf(ridge.get_noise_2d(wx, wz))
@@ -389,9 +397,38 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 		mesas.append({ "x": float(mx) - half, "z": float(mz) - half, "top_r": top_r, "h": target })
 		placed_mesas += 1
 
+	# round off every crest, terrace lip, and warp artifact (fewer passes on huge grids)
+	_smooth_heights(2 if grid <= 768 else 1)
+
 	update_region(0, grid, 0, grid)
 	_upload()
 	_update_collision()
+
+## Separable 5-tap gaussian blur over the heightmap — curves hill shoulders and
+## terrace lips into smooth rolls while leaving broad shapes (cliffs, tiers) intact.
+func _smooth_heights(iterations: int) -> void:
+	var side := grid + 1
+	var tmp := PackedFloat32Array()
+	tmp.resize(side * side)
+	for _it in iterations:
+		for z in side:
+			var row := z * side
+			for x in side:
+				var xm2 := row + clampi(x - 2, 0, grid)
+				var xm1 := row + clampi(x - 1, 0, grid)
+				var xp1 := row + clampi(x + 1, 0, grid)
+				var xp2 := row + clampi(x + 2, 0, grid)
+				tmp[row + x] = (heights[xm2] + 4.0 * heights[xm1] + 6.0 * heights[row + x] \
+					+ 4.0 * heights[xp1] + heights[xp2]) * 0.0625
+		for z in side:
+			var zm2 := clampi(z - 2, 0, grid) * side
+			var zm1 := clampi(z - 1, 0, grid) * side
+			var zc := z * side
+			var zp1 := clampi(z + 1, 0, grid) * side
+			var zp2 := clampi(z + 2, 0, grid) * side
+			for x in side:
+				heights[zc + x] = (tmp[zm2 + x] + 4.0 * tmp[zm1 + x] + 6.0 * tmp[zc + x] \
+					+ 4.0 * tmp[zp1 + x] + tmp[zp2 + x]) * 0.0625
 
 func flatten_all(h: float) -> void:
 	for i in heights.size():
