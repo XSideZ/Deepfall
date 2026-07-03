@@ -154,7 +154,7 @@ func rebuild(terrain, radius: float, water_level: float, snow_line: float, mult:
 			if h < water_level + 1.1 or h > snow_line:
 				continue
 			# lush flora stays out of the desert AND the ice (pebbles override via "bio")
-			var bio_rng: Vector2 = e.get("bio", Vector2(0.28, 1.35))
+			var bio_rng: Vector2 = e.get("bio", Vector2(0.44, 1.33))
 			if terrain.has_method("biome_at"):
 				var bv: float = terrain.biome_at(x, z)
 				if bv < bio_rng.x or bv > bio_rng.y:

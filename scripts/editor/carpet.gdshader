@@ -58,9 +58,10 @@ void vertex() {
 	float bio = textureLod(biome_map, uv, 0.0).r + (h1 - 0.5) * 0.10;
 
 	if (mode == 0) {
-		// land: dry above the waterline, out of desert + ice
+		// land: dry above the waterline, out of desert + ice. The desert gate matches
+		// where the GROUND turns green (bio_d fade ends ~0.5) so no grass on sand.
 		if (gy < water_level + 0.9) { ok = 0.0; }
-		if (bio < 0.30 || bio > 1.33) { ok = 0.0; }
+		if (bio < 0.46 || bio > 1.33) { ok = 0.0; }
 	} else {
 		// sea: properly submerged only
 		if (gy > water_level - 0.7) { ok = 0.0; }

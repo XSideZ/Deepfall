@@ -21,7 +21,7 @@ uniform vec3 col_snow : source_color = vec3(0.93, 0.95, 0.99);
 uniform sampler2D biome_map : filter_linear;
 uniform float terrain_span = 512.0;
 uniform float snow_amount = 0.0;
-uniform vec3 col_grass_desert : source_color = vec3(0.96, 0.94, 0.86);  // proper sand — same as the beach, dunes flow into shore
+uniform vec3 col_grass_desert : source_color = vec3(0.95, 0.82, 0.52);  // HOT golden desert sand (beach band keeps its pale col_sand; they blend at the coast)
 uniform vec3 col_grass_jungle : source_color = vec3(0.19, 0.53, 0.13);  // deep saturated jungle
 uniform vec3 col_rock_grey : source_color = vec3(0.50, 0.50, 0.54);     // grey cliff stone
 
@@ -169,6 +169,6 @@ void fragment() {
 	}
 
 	ALBEDO = base * detail;
-	ROUGHNESS = 0.9;
-	SPECULAR = 0.2;
+	ROUGHNESS = 0.95;
+	SPECULAR = 0.05;   // kill the sheen — near-white ground was reflecting the sky as silver/metal
 }

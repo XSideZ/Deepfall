@@ -132,7 +132,7 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			if _too_close(Vector2(x, z), tree_pos, 3.2):
 				continue
 			var dbio: float = terrain.biome_at(x, z)
-			if dbio < 0.28 or dbio > 1.35:
+			if dbio < 0.42 or dbio > 1.35:
 				continue   # desert gets cacti, ice gets snowy dead trees
 			var h: float = terrain.height_at(x, z)
 			if h < water_level + 2.0 or h > veg_max or _slope_at(terrain, x, z) > 0.6:
@@ -159,7 +159,7 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			if _too_close(Vector2(x, z), tree_pos, 3.2):
 				continue
 			var cbio: float = terrain.biome_at(x, z)
-			if cbio < 0.28 or cbio > 1.35:
+			if cbio < 0.42 or cbio > 1.35:
 				continue
 			var h: float = terrain.height_at(x, z)
 			if h < vw + 6.0 or h > veg_max or _slope_at(terrain, x, z) > 0.5:
