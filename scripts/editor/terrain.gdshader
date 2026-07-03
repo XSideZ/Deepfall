@@ -21,7 +21,7 @@ uniform vec3 col_snow : source_color = vec3(0.93, 0.95, 0.99);
 uniform sampler2D biome_map : filter_linear;
 uniform float terrain_span = 512.0;
 uniform float snow_amount = 0.0;
-uniform vec3 col_grass_desert : source_color = vec3(0.88, 0.77, 0.52);  // desert sand (a shade deeper than beach sand -> they blend)
+uniform vec3 col_grass_desert : source_color = vec3(0.96, 0.94, 0.86);  // proper sand — same as the beach, dunes flow into shore
 uniform vec3 col_grass_jungle : source_color = vec3(0.19, 0.53, 0.13);  // deep saturated jungle
 uniform vec3 col_rock_grey : source_color = vec3(0.50, 0.50, 0.54);     // grey cliff stone
 
@@ -118,6 +118,14 @@ void fragment() {
 	base = mix(base, rock_col, m_rock);
 	base = mix(base, col_snow, m_snow);
 	base = mix(base, sand_col, m_sand);
+
+	// ICE BIOME (bio ~1.7): snow blankets everything; steep rock shows through the
+	// drifts a little so cliffs still read as stone
+	float w_ice = smoothstep(1.30, 1.60, bio);
+	float snow_grain = tri_luma(tex_snow, v_wpos, wnrm, tile_scale);
+	vec3 ice_col = col_snow * (0.88 + snow_grain * 0.24);
+	ice_col = mix(ice_col, vec3(0.72, 0.82, 0.94), smoothstep(0.5, 0.9, bmacro) * 0.35);  // icy blue patches
+	base = mix(base, ice_col, w_ice * (1.0 - m_rock * 0.45));
 
 	// faint texture detail (same masks) modulating brightness only
 	float dl = tri_luma(tex_grass, v_wpos, wnrm, tile_scale);

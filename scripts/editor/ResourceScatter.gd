@@ -30,7 +30,11 @@ var dead_trees: Array = []     # bare/dead trees (barren world)
 var palms: Array = []          # shoreline trees (bloom, near water)
 var cacti: Array = []          # desert biome (alive even in the barren world)
 var blooms: Array = []         # desert bloom — harvestable fruit
-var crystals: Array = []
+var quartz: Array = []       # underwater cove mineral (was "Crystal", renamed)
+var snow_trees: Array = []   # living trees of the ice biome
+var snow_dead: Array = []    # snowy dead trees/stump/log (barren ice)
+var snow_rocks: Array = []   # ice-biome stone
+var ice_crystals: Array = [] # TRUE Crystal — only spawns in the ice biome
 var corals: Array = []
 var kelps: Array = []
 var starfish: Array = []
@@ -53,13 +57,23 @@ func setup(p_editor) -> void:
 		_add_whole(trees, nat.get(f, ""), 7.5)
 	for f in ["DeadTree_1.fbx", "DeadTree_2.fbx", "DeadTree_3.fbx", "DeadTree_4.fbx", "DeadTree_5.fbx"]:
 		_add_whole(dead_trees, nat.get(f, ""), 6.0)
-	# desert + shoreline set (Jay's GLBs): palm sheet splits into its 5 trees
-	palms = _variants("res://assets/props/palm_trees.glb", 7.5)
+	# desert + shoreline set (Jay's GLBs): palm sheet splits into its 5 trees.
+	# NODE-based splitting — these sheets keep one mesh node per object, and the
+	# old surface-cluster splitter blew past MAX_MESH_SURFACES on the snow set.
+	palms = _variants_nodes("res://assets/props/palm_trees.glb", 7.5)
 	_add_whole(cacti, "res://assets/props/cactus_a.glb", 2.1)
 	_add_whole(cacti, "res://assets/props/cactus_b.glb", 1.7)
 	_add_whole(blooms, "res://assets/props/desert_bloom.glb", 0.9)
-	_add_whole(crystals, CRYSTAL_PATH, 1.1)
-	for c in crystals:
+	_add_whole(quartz, CRYSTAL_PATH, 1.1)
+	for c in quartz:
+		_add_glow(c)
+	# ice biome set (Jay's GLBs): snowy pines/rocks/dead trees split into variants,
+	# plus the TRUE Crystal that only grows in the snow
+	snow_trees = _variants_nodes("res://assets/props/snow_trees.glb", 8.0)
+	snow_rocks = _variants_nodes("res://assets/props/snow_rocks.glb", 1.6)
+	snow_dead = _variants_nodes("res://assets/props/snow_dead_trees.glb", 5.5)
+	_add_whole(ice_crystals, "res://assets/props/ice_crystal.glb", 1.2)
+	for c in ice_crystals:
 		_add_glow(c)
 	for p in CORAL_WHOLE_PATHS:
 		_add_whole(corals, p, 1.2)
@@ -68,8 +82,10 @@ func setup(p_editor) -> void:
 	starfish = _variants(STARFISH_PATH, 0.45)
 	_add_whole(satellites, SAT_A_PATH, 2.8)
 	_add_whole(satellites, SAT_B_PATH, 2.8)
-	print("ResourceScatter pools: rocks=%d trees=%d dead=%d palms=%d cacti=%d blooms=%d corals=%d starfish=%d kelp=%d crystals=%d" %
-		[rocks.size(), trees.size(), dead_trees.size(), palms.size(), cacti.size(), blooms.size(), corals.size(), starfish.size(), kelps.size(), crystals.size()])
+	print("ResourceScatter pools: rocks=%d trees=%d dead=%d palms=%d cacti=%d blooms=%d snowT=%d snowR=%d snowD=%d iceC=%d corals=%d starfish=%d kelp=%d quartz=%d" %
+		[rocks.size(), trees.size(), dead_trees.size(), palms.size(), cacti.size(), blooms.size(),
+		snow_trees.size(), snow_rocks.size(), snow_dead.size(), ice_crystals.size(),
+		corals.size(), starfish.size(), kelps.size(), quartz.size()])
 
 # --- rebuilds ------------------------------------------------------------------
 
@@ -93,11 +109,16 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 	rng.seed = 913377
 	# one shared spacing set for EVERYTHING on land so no two props stack
 	var tree_pos: Array = []
-	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos)
+	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 1.35))
 	_scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, tree_pos)
 	# the desert is ALIVE even in the barren world — cacti (graze) + blooms (fruit)
 	_scatter(terrain, rng, land_root, cacti, int(dead_count * 0.6), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
 	_scatter(terrain, rng, land_root, blooms, int(dead_count * 0.4), radius, "Fruit", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30), 1)
+	# the ICE is a frozen world of its own from day one: snowy rocks + snowy dead
+	# trees + the true Crystal, which only grows in the snow
+	_scatter(terrain, rng, land_root, snow_rocks, int(rock_count * 0.5), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
+	_scatter(terrain, rng, land_root, snow_dead, int(dead_count * 0.7), radius, "Wood", water_level + 1.5, veg_max, 0.6, Vector2(0.8, 1.4), -0.35, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
+	_scatter(terrain, rng, land_root, ice_crystals, int(rock_count * 0.35), radius, "Crystal", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
 	# dead trees across the whole barren island; remember each so the bloom can wither it
 	if not dead_trees.is_empty():
 		var placed := 0
@@ -110,8 +131,9 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			var z := sin(a) * d
 			if _too_close(Vector2(x, z), tree_pos, 3.2):
 				continue
-			if terrain.biome_at(x, z) < 0.28:
-				continue   # deserts get cacti, not dead trees
+			var dbio: float = terrain.biome_at(x, z)
+			if dbio < 0.28 or dbio > 1.35:
+				continue   # desert gets cacti, ice gets snowy dead trees
 			var h: float = terrain.height_at(x, z)
 			if h < water_level + 2.0 or h > veg_max or _slope_at(terrain, x, z) > 0.6:
 				continue
@@ -136,7 +158,8 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			var z := sin(a) * d
 			if _too_close(Vector2(x, z), tree_pos, 3.2):
 				continue
-			if terrain.biome_at(x, z) < 0.28:
+			var cbio: float = terrain.biome_at(x, z)
+			if cbio < 0.28 or cbio > 1.35:
 				continue
 			var h: float = terrain.height_at(x, z)
 			if h < vw + 6.0 or h > veg_max or _slope_at(terrain, x, z) > 0.5:
@@ -155,12 +178,35 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 			var z := sin(a) * d
 			if _too_close(Vector2(x, z), tree_pos, 3.4):
 				continue
+			if terrain.biome_at(x, z) > 1.35:
+				continue   # no palms on frozen shores
 			var h: float = terrain.height_at(x, z)
 			if h < vw + 1.2 or h > vw + 6.0 or _slope_at(terrain, x, z) > 0.5:
 				continue
 			tree_pos.append(Vector2(x, z))
 			live_candidates.append({ "pos": Vector3(x, h - 0.35, z), "pool": "palm", "idx": rng.randi_range(0, palms.size() - 1), "spawned": false })
 			planned += 1
+	# snowy pines: the ice biome's living trees, sprouting with the bloom like the rest
+	if not snow_trees.is_empty():
+		var stries := 0
+		var want_snow := int(live_count * 0.6)
+		var splanned := 0
+		while splanned < want_snow and stries < want_snow * 26:
+			stries += 1
+			var a := rng.randf() * TAU
+			var d := radius * sqrt(rng.randf())
+			var x := cos(a) * d
+			var z := sin(a) * d
+			if _too_close(Vector2(x, z), tree_pos, 3.2):
+				continue
+			if terrain.biome_at(x, z) < 1.40:
+				continue
+			var h: float = terrain.height_at(x, z)
+			if h < vw + 2.0 or h > veg_max or _slope_at(terrain, x, z) > 0.5:
+				continue
+			tree_pos.append(Vector2(x, z))
+			live_candidates.append({ "pos": Vector3(x, h - 0.45, z), "pool": "snow", "idx": rng.randi_range(0, snow_trees.size() - 1), "spawned": false })
+			splanned += 1
 
 ## Advance the living world out to `radius` from `origin`: sprout any living-tree
 ## candidate now inside the front, wither any dead tree it has overtaken.
@@ -186,7 +232,10 @@ func grow_front(origin: Vector2, radius: float, instant := false) -> void:
 func _sprout_live_tree(c: Dictionary, instant: bool) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(c.pos.x * 13.0 + c.pos.z * 71.0)
-	var pool: Array = palms if String(c.get("pool", "tree")) == "palm" else trees
+	var pool: Array = trees
+	match String(c.get("pool", "tree")):
+		"palm": pool = palms
+		"snow": pool = snow_trees
 	var body := _spawn(pool[int(c.idx)], "live", rng, Vector2(0.85, 1.35))
 	body.set_meta("resource_type", "Wood")
 	body.set_meta("hits", 3)
@@ -212,21 +261,30 @@ func rebuild_land(terrain, radius: float, water_level: float, rock_count: int, t
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 913377
 	var occ: Array = []   # shared spacing set so nothing stacks
-	# rocks: anywhere on land off the beach
-	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, occ)
-	# living trees: inland + off-desert, inside the bloom; PALMS own the shoreline band
+	# rocks: anywhere on land off the beach (ice gets its own snowy rocks)
+	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 1.35))
+	# living trees: inland + off-desert/ice, inside the bloom; PALMS own the shoreline band
 	_scatter(terrain, rng, land_root, trees, tree_count, radius, "Wood", water_level + 6.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
-		bloom_center, bloom_radius, 1, occ, Vector2(0.28, 2.0))
+		bloom_center, bloom_radius, 1, occ, Vector2(0.28, 1.35))
 	_scatter(terrain, rng, land_root, palms, int(tree_count * 0.5), radius, "Wood", water_level + 1.2, water_level + 6.0, 0.5, Vector2(0.8, 1.3), -0.35,
-		bloom_center, bloom_radius, 1, occ)
+		bloom_center, bloom_radius, 1, occ, Vector2(-1.0, 1.35))
 	# desert: cacti (graze) + desert blooms (fruit, picked in one hit)
 	_scatter(terrain, rng, land_root, cacti, int(tree_count * 0.6), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
 	_scatter(terrain, rng, land_root, blooms, int(tree_count * 0.4), radius, "Fruit", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30), 1)
+	# ice: snowy trees/rocks/dead trees + the true Crystal
+	_scatter(terrain, rng, land_root, snow_trees, int(tree_count * 0.6), radius, "Wood", water_level + 2.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
+		bloom_center, bloom_radius, 1, occ, Vector2(1.40, 3.0))
+	_scatter(terrain, rng, land_root, snow_rocks, int(rock_count * 0.5), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.8), -0.06,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(1.40, 3.0))
+	_scatter(terrain, rng, land_root, snow_dead, int(tree_count * 0.5), radius, "Wood", water_level + 1.5, veg_max, 0.6, Vector2(0.8, 1.4), -0.35,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(1.40, 3.0))
+	_scatter(terrain, rng, land_root, ice_crystals, int(rock_count * 0.35), radius, "Crystal", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(1.40, 3.0))
 	# dead trees: OUTSIDE the bloom (the barren wastes); tolerate steeper/higher ground
 	_scatter(terrain, rng, land_root, dead_trees, dead_count, radius, "Wood", water_level + 2.0, veg_max, 0.6, Vector2(0.8, 1.4), -0.45,
-		bloom_center, bloom_radius, 2, occ, Vector2(0.28, 2.0))
+		bloom_center, bloom_radius, 2, occ, Vector2(0.28, 1.35))
 	# satellites: crash-landed debris (mixed designs) — the land source of Metal
 	_scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, occ)
 
@@ -249,7 +307,7 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 		if ch < water_level - 1.5 and ch > water_level - 6.0:
 			cove_centers.append(Vector2(cx, cz))
 	if cove_centers.is_empty():
-		_scatter(terrain, rng, sea_root, crystals, crystal_count, radius, "Crystal", -1e9, water_level - 1.2, 1.0, Vector2(0.7, 1.8), -0.12)
+		_scatter(terrain, rng, sea_root, quartz, crystal_count, radius, "Quartz", -1e9, water_level - 1.2, 1.0, Vector2(0.7, 1.8), -0.12)
 	else:
 		var placed := 0
 		var attempts := 0
@@ -261,8 +319,8 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 			var h: float = terrain.height_at(x, z)
 			if h > water_level - 1.0 or h < water_level - 8.0:
 				continue
-			var body := _spawn(crystals[0], "crystal", rng, Vector2(0.7, 1.8))
-			body.set_meta("resource_type", "Crystal")
+			var body := _spawn(quartz[0], "quartz", rng, Vector2(0.7, 1.8))
+			body.set_meta("resource_type", "Quartz")
 			body.set_meta("hits", 3)
 			sea_root.add_child(body)
 			body.global_position = Vector3(x, h - 0.12, z)
@@ -275,11 +333,11 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 ## A crystal delivered by a meteor impact — harvestable like any scattered resource.
 ## Meteor impacts leave glowing RED "Meteorite Shard" resources (a red crystal variant).
 func spawn_meteor_shard(pos: Vector3) -> void:
-	if crystals.is_empty():
+	if quartz.is_empty():
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = randi()
-	var body := _spawn(crystals[0], "shard_meteor", rng, Vector2(0.8, 1.5))
+	var body := _spawn(quartz[0], "shard_meteor", rng, Vector2(0.8, 1.5))
 	body.set_meta("resource_type", "Shard")
 	body.set_meta("hits", 3)
 	_tint_red(body)
@@ -311,17 +369,23 @@ func _tint_red(node: Node) -> void:
 ## Spawn a single resource at a spot (used by the timed-respawn system). The type
 ## picks which pool; it pops out of the ground with a little grow tween.
 func respawn_one(pos: Vector3, resource: String) -> void:
+	var bio := 0.5
+	if editor and editor.terrain:
+		bio = editor.terrain.biome_at(pos.x, pos.z)
 	var pool: Array = rocks
 	match resource:
-		"Wood": pool = trees if not trees.is_empty() else dead_trees
-		"Stone": pool = rocks
-		"Crystal", "Shard": pool = crystals
+		"Wood":
+			pool = snow_trees if bio > 1.4 and not snow_trees.is_empty() else (trees if not trees.is_empty() else dead_trees)
+		"Stone":
+			pool = snow_rocks if bio > 1.4 and not snow_rocks.is_empty() else rocks
+		"Quartz", "Shard": pool = quartz
+		"Crystal": pool = ice_crystals
 		"Coral": pool = corals
 		"Fruit": pool = blooms
 		"Biomass":
 			# on land biomass regrows as cacti; underwater as kelp/starfish
-			var in_desert: bool = editor and editor.terrain and pos.y > editor.water_level
-			pool = cacti if in_desert and not cacti.is_empty() else (kelps if not kelps.is_empty() else starfish)
+			var on_land: bool = editor and editor.terrain and pos.y > editor.water_level
+			pool = cacti if on_land and not cacti.is_empty() else (kelps if not kelps.is_empty() else starfish)
 		"Metal": pool = satellites
 	if pool.is_empty():
 		return
@@ -352,7 +416,7 @@ func clear() -> void:
 
 func _exit_tree() -> void:
 	# template pools live outside the scene tree, so they must be freed manually
-	for pool in [rocks, trees, dead_trees, palms, cacti, blooms, crystals, corals, kelps, starfish, satellites]:
+	for pool in [rocks, trees, dead_trees, palms, cacti, blooms, quartz, snow_trees, snow_dead, snow_rocks, ice_crystals, corals, kelps, starfish, satellites]:
 		for t in pool:
 			if is_instance_valid(t):
 				t.free()
@@ -496,6 +560,47 @@ func _variants(path: String, target_size: float) -> Array:
 		_autofit(v, target_size * rel)
 		out.append(holder)
 	return out
+
+## Split a sheet GLB by its MESH NODES (modern sheets keep one node per object).
+## No triangle analysis, no surface explosion — and stumps/logs keep their natural
+## RELATIVE size instead of being blown up to tree height.
+func _variants_nodes(path: String, target_size: float) -> Array:
+	var out: Array = []
+	if not ResourceLoader.exists(path):
+		return out
+	var s = load(path)
+	if not (s is PackedScene):
+		return out
+	var inst: Node = (s as PackedScene).instantiate()
+	var found: Array = []   # [mesh, accumulated xf]
+	_collect_meshes(inst, Transform3D(), found)
+	var max_h := 0.0
+	var hs: Array = []
+	for f in found:
+		var ab: AABB = (f[1] as Transform3D) * (f[0] as Mesh).get_aabb()
+		hs.append(ab.size.y)
+		max_h = maxf(max_h, ab.size.y)
+	for i in found.size():
+		var mi := MeshInstance3D.new()
+		mi.mesh = found[i][0]
+		mi.transform = Transform3D((found[i][1] as Transform3D).basis, Vector3.ZERO)
+		var holder := Node3D.new()
+		holder.add_child(mi)
+		force_opaque(holder)
+		var rel: float = clampf(hs[i] / maxf(max_h, 0.001), 0.2, 1.0)
+		_autofit(mi, target_size * rel)
+		out.append(holder)
+	inst.free()
+	return out
+
+func _collect_meshes(n: Node, xf: Transform3D, out: Array) -> void:
+	var local := xf
+	if n is Node3D:
+		local = xf * (n as Node3D).transform
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		out.append([(n as MeshInstance3D).mesh, local])
+	for c in n.get_children():
+		_collect_meshes(c, local, out)
 
 func _spawn(template: Node3D, id: String, rng: RandomNumberGenerator, scale_range: Vector2) -> StaticBody3D:
 	var visual: Node3D = template.duplicate()

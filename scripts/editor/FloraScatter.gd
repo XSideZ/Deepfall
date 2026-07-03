@@ -37,12 +37,12 @@ const ENTRIES := [
 	{ "f": "Mushroom_Common.fbx", "n": 140, "h": 0.30, "dim": "h", "s": Vector2(0.7, 1.4), "patch": 0.35, "sway": 0.0 },
 	{ "f": "Mushroom_Laetiporus.fbx", "n": 60, "h": 0.35, "dim": "h", "s": Vector2(0.7, 1.3), "patch": 0.35, "sway": 0.0 },
 	# stones (no wind, obviously) — allowed everywhere including the desert
-	{ "f": "Pebble_Round_1.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 2.0) },
-	{ "f": "Pebble_Round_2.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 2.0) },
-	{ "f": "Pebble_Round_4.fbx", "n": 150, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 2.0) },
-	{ "f": "Pebble_Square_1.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 2.0) },
-	{ "f": "Pebble_Square_3.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 2.0) },
-	{ "f": "Pebble_Square_6.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 2.0) },
+	{ "f": "Pebble_Round_1.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Round_2.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Round_4.fbx", "n": 150, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Square_1.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Square_3.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Square_6.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
 ]
 
 var _layers: Array = []   # { mm, entry, base_xf, norm }
@@ -153,8 +153,8 @@ func rebuild(terrain, radius: float, water_level: float, snow_line: float, mult:
 			var h: float = terrain.height_at(x, z)
 			if h < water_level + 1.1 or h > snow_line:
 				continue
-			# lush flora stays out of the desert biome (pebbles/petals allow it via "bio")
-			var bio_rng: Vector2 = e.get("bio", Vector2(0.28, 2.0))
+			# lush flora stays out of the desert AND the ice (pebbles override via "bio")
+			var bio_rng: Vector2 = e.get("bio", Vector2(0.28, 1.35))
 			if terrain.has_method("biome_at"):
 				var bv: float = terrain.biome_at(x, z)
 				if bv < bio_rng.x or bv > bio_rng.y:

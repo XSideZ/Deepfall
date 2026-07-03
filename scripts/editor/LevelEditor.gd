@@ -73,7 +73,8 @@ var interact_label: Label
 # inventory: "spore sacs" that swell as the alien absorbs matter
 const RES_COLORS := {
 	"Stone": Color(0.72, 0.72, 0.75), "Wood": Color(0.65, 0.42, 0.22),
-	"Crystal": Color(0.45, 0.90, 1.0), "Coral": Color(1.0, 0.55, 0.45),
+	"Quartz": Color(0.85, 0.92, 1.0), "Crystal": Color(0.35, 0.70, 1.0),
+	"Coral": Color(1.0, 0.55, 0.45),
 	"Biomass": Color(0.50, 1.0, 0.60), "Metal": Color(0.80, 0.82, 0.90),
 	"Shard": Color(1.0, 0.22, 0.14), "Fruit": Color(1.0, 0.52, 0.62),
 }
@@ -92,7 +93,7 @@ const TERM_MAP_SIZE := Vector2(460, 340)
 const SEED_NAMES := ["Small pod", "Grand pod", "Stairwell", "Storage sac", "Refinery gland"]
 const SEED_COSTS := [
 	{ "Stone": 6 },                   # Small pod
-	{ "Stone": 12, "Crystal": 4 },    # Grand pod
+	{ "Stone": 12, "Quartz": 4 },     # Grand pod
 	{ "Wood": 8, "Stone": 4 },        # Stairwell
 	{ "Wood": 10 },                   # Storage sac (+8 spore slots)
 	{ "Stone": 8, "Metal": 4 },       # Refinery gland (5 Stone -> 2 Metal)
@@ -270,6 +271,7 @@ func _setup_environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC   # filmic keeps hues saturated as they brighten
 	env.tonemap_exposure = 1.25
+	env.tonemap_white = 6.0   # soft highlight rolloff — snow/sand/water stop clipping to flat white
 
 	# lighting "life": vivid bloom (sun glitter on water, crystal glow) + punchy colour
 	env.glow_enabled = true
@@ -350,7 +352,7 @@ func _update_daynight(delta: float) -> void:
 		day_phase = fposmod(day_phase + delta / (2.0 * half_secs), 1.0)
 	var elev := sin(day_phase * TAU)             # >0 day, <0 night
 	_day_f = clampf(elev, 0.0, 1.0)
-	var dusk := clampf(1.0 - absf(elev) * 3.5, 0.0, 1.0)   # warm band at sunrise/sunset
+	var dusk := clampf(1.0 - absf(elev) * 2.8, 0.0, 1.0)   # warm band at sunrise/sunset (long golden hour)
 	sun.rotation_degrees = Vector3(-day_phase * 360.0, -42.0, 0.0)
 
 	# weather dimming stacks on the daylight level
@@ -369,7 +371,8 @@ func _update_daynight(delta: float) -> void:
 	var env := world_env.environment
 	if sky_mode == "space":
 		env.ambient_light_color = Color(0.30, 0.36, 0.52).lerp(Color(0.60, 0.68, 0.82), _day_f)
-		env.ambient_light_energy = (0.90 + 0.55 * _day_f) * dim
+		# midday ambient a touch lower than before -> sun shadows keep some depth
+		env.ambient_light_energy = (0.90 + 0.42 * _day_f) * dim
 		var bot := Color(0.16, 0.22, 0.34).lerp(Color(0.40, 0.80, 0.92), _day_f)
 		bot = bot.lerp(Color(0.95, 0.55, 0.35), dusk * 0.55)
 		bot = bot.lerp(Color(0.60, 0.24, 0.16), _storm_mix).lerp(Color(0.38, 0.44, 0.50), _rain_mix * 0.8)

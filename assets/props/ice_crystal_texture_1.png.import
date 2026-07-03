@@ -2,20 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://hvysynxsky2w"
-path.s3tc="res://.godot/imported/palm_trees_PalmTree_Trunk.png-4678a2547dc1c7a5a29922209b7a054b.s3tc.ctex"
+uid="uid://c4tqqtbc8vo6q"
+path.s3tc="res://.godot/imported/ice_crystal_texture_1.png-bf40ad1de8e94f2499b7d0fb1e73b3e0.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "977c8f23b587458317fde9493b075148"
+"md5": "4c7f593d2b080cf54a35bef3f88ab6b8"
 }
 
 [deps]
 
-source_file="res://assets/props/palm_trees_PalmTree_Trunk.png"
-dest_files=["res://.godot/imported/palm_trees_PalmTree_Trunk.png-4678a2547dc1c7a5a29922209b7a054b.s3tc.ctex"]
+source_file="res://assets/props/ice_crystal_texture_1.png"
+dest_files=["res://.godot/imported/ice_crystal_texture_1.png-bf40ad1de8e94f2499b7d0fb1e73b3e0.s3tc.ctex"]
 
 [params]
 

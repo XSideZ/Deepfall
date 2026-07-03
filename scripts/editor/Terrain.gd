@@ -242,6 +242,20 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 	cliffvar_n.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	cliffvar_n.frequency = sections_across * 0.75 / float(grid)
 
+	# GUARANTEED biome regions: desert + ice always exist, at seeded-random spots,
+	# as big radial blobs with noisy edges (noise gating alone skipped them on many seeds)
+	var rrng := RandomNumberGenerator.new()
+	rrng.seed = noise_seed + 99
+	var half_g := grid * 0.5
+	var desert_c := Vector2(rrng.randf_range(-0.5, 0.5), rrng.randf_range(-0.5, 0.5)) * half_g
+	var ice_c := desert_c
+	for i in 30:
+		ice_c = Vector2(rrng.randf_range(-0.5, 0.5), rrng.randf_range(-0.5, 0.5)) * half_g
+		if ice_c.distance_to(desert_c) > half_g * 0.85:
+			break
+	var desert_r := half_g * rrng.randf_range(0.46, 0.55)   # ~quarter of the map
+	var ice_r := half_g * rrng.randf_range(0.40, 0.48)
+
 	biomes = PackedFloat32Array()
 	biomes.resize((grid + 1) * (grid + 1))
 	var warp_amp := 20.0
@@ -259,11 +273,16 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			# map is gently-shelved plains; jungle highlands are the rarer tall regions.
 			var b01 := clampf(biome_n.get_noise_2d(fx, fz) * 0.5 + 0.5, 0.0, 1.0)
 			# stretch contrast: simplex is centre-heavy, so without this many seeds never
-			# reach the desert/jungle tails at all
+			# reach the jungle tail at all
 			b01 = clampf((b01 - 0.5) * 1.8 + 0.5, 0.0, 1.0)
-			var w_desert := smoothstep(0.44, 0.24, b01)   # ~quarter of the map runs desert
-			var w_jungle := smoothstep(0.58, 0.80, b01)
-			var w_plain: float = clampf(1.0 - w_desert - w_jungle, 0.0, 1.0)
+			# desert + ice: radial regions with a noisy coastline-like edge
+			var pv2 := Vector2(fx - half, fz - half)
+			var edge_n := biome_n.get_noise_2d(fx * 2.3, fz * 2.3) * 15.0
+			var w_desert := 1.0 - smoothstep(desert_r - 18.0, desert_r + 8.0, pv2.distance_to(desert_c) + edge_n)
+			var w_ice := 1.0 - smoothstep(ice_r - 18.0, ice_r + 8.0, pv2.distance_to(ice_c) + edge_n)
+			w_desert *= 1.0 - w_ice   # ice wins any overlap (they're seeded far apart)
+			var w_jungle := smoothstep(0.58, 0.80, b01) * (1.0 - w_desert) * (1.0 - w_ice)
+			var w_plain: float = clampf(1.0 - w_desert - w_jungle - w_ice, 0.0, 1.0)
 
 			# rolling base hills
 			var b := clampf(n_base.get_noise_2d(wx, wz) * 0.5 + 0.5, 0.0, 1.0)
@@ -290,7 +309,8 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			var dune := clampf(n_base.get_noise_2d(wx * 0.5, wz * 0.5) * 0.5 + 0.5, 0.0, 1.0)
 			var h_desert := pow(dune, 1.4) * 0.6 + sin((wx + wz) * 0.045) * 0.04 + 0.05
 			# LOCAL detail: gentle hills + small shelves that live INSIDE each region tier
-			var local_norm: float = h_plain * w_plain + h_desert * w_desert + h_mtn * w_jungle
+			# (the ice field is shaped like the plains — snowy shelved hills)
+			var local_norm: float = h_plain * (w_plain + w_ice) + h_desert * w_desert + h_mtn * w_jungle
 
 			# REGION TIER: the dominant base elevation of this big section (flat, with a
 			# cliff at its boundary). Lowest tier sits underwater so seas form in the basins.
@@ -324,7 +344,12 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 			var fall := 1.0 - smoothstep(0.55, 0.95, rr)
 			var idx := z * side + x
 			heights[idx] = lerpf(-16.0, height, fall)
-			biomes[idx] = b01
+			# biome scalar: 0.05 desert .. b01 plains/jungle .. 1.7 ice (texture filtering
+			# blends the boundaries into natural transition strips)
+			var bio_v := b01
+			bio_v = lerpf(bio_v, 0.05, w_desert)
+			bio_v = lerpf(bio_v, 1.7, w_ice)
+			biomes[idx] = bio_v
 
 	# mesa buttes: wide flat-topped rock rises blended smoothly into the ground
 	# (lerp toward the plateau height -> no pedestal ring / square base), kept below
