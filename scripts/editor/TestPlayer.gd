@@ -50,6 +50,8 @@ var bob := 0.0
 const GRAP_RANGE := 55.0
 const GRAP_ACCEL := 46.0
 const GRAP_MAX := 34.0
+const GRAP_LOOK_STEER := 1.5   # how hard looking bends the swing while attached
+const AIR_LOOK_STEER := 1.9    # how hard looking bends the flight after release
 var _grappling := false
 var _grap_point := Vector3.ZERO
 var _fling_t := 0.0          # post-release window where momentum is preserved
@@ -267,13 +269,27 @@ func _physics_process(delta: float) -> void:
 			var perp := velocity - pull * along
 			along = minf(along + GRAP_ACCEL * delta, GRAP_MAX)
 			velocity = pull * along + perp * maxf(1.0 - 2.2 * delta, 0.0)
+			# swing steering: bend momentum toward where you LOOK (spiderman feel) —
+			# aim past the anchor to whip around it, aim aside to arc the swing
+			var look := -cam.global_transform.basis.z
+			velocity = velocity.lerp(look * velocity.length(), clampf(GRAP_LOOK_STEER * delta, 0.0, 0.5))
 			velocity.y -= GRAVITY * 0.25 * delta
 	else:
 		dir.y = 0.0
 		dir = dir.normalized()
 		var spd := (SPRINT if fast else WALK) * speed_mult
 		if _fling_t > 0.0 and not is_on_floor():
-			# flung: keep momentum, input only STEERS (adds a little air control)
+			# flung: keep momentum; LOOKING bends your flight path (speed preserved,
+			# gravity untouched), WASD adds a little extra air control on top
+			var hv := Vector3(velocity.x, 0, velocity.z)
+			var hsp := hv.length()
+			if hsp > 3.0:
+				var look_h := -cam.global_transform.basis.z
+				look_h.y = 0.0
+				if look_h.length() > 0.1:
+					var bent := hv.normalized().slerp(look_h.normalized(), clampf(AIR_LOOK_STEER * delta, 0.0, 1.0))
+					velocity.x = bent.x * hsp
+					velocity.z = bent.z * hsp
 			velocity.x += dir.x * spd * delta * 2.6
 			velocity.z += dir.z * spd * delta * 2.6
 		else:
