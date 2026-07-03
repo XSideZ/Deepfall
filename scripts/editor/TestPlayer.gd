@@ -265,15 +265,21 @@ func _physics_process(delta: float) -> void:
 			_release_grapple(true)   # arrived — pop off with momentum kept
 		else:
 			var pull := to / d
+			# grinding along terrain: move_and_slide redirects the pull into surface
+			# slide every frame, which COMPOUNDS — winch gently while touching, and
+			# hard-cap total speed so contact can never build a rocket-sled
+			var touching := is_on_floor() or is_on_wall()
 			var along := velocity.dot(pull)
 			var perp := velocity - pull * along
-			along = minf(along + GRAP_ACCEL * delta, GRAP_MAX)
-			velocity = pull * along + perp * maxf(1.0 - 2.2 * delta, 0.0)
+			along = minf(along + GRAP_ACCEL * (0.4 if touching else 1.0) * delta, GRAP_MAX)
+			velocity = pull * along + perp * maxf(1.0 - (3.5 if touching else 2.2) * delta, 0.0)
 			# swing steering: bend momentum toward where you LOOK (spiderman feel) —
 			# aim past the anchor to whip around it, aim aside to arc the swing
-			var look := -cam.global_transform.basis.z
-			velocity = velocity.lerp(look * velocity.length(), clampf(GRAP_LOOK_STEER * delta, 0.0, 0.5))
+			if not touching:
+				var look := -cam.global_transform.basis.z
+				velocity = velocity.lerp(look * velocity.length(), clampf(GRAP_LOOK_STEER * delta, 0.0, 0.5))
 			velocity.y -= GRAVITY * 0.25 * delta
+			velocity = velocity.limit_length(GRAP_MAX * 1.15)
 	else:
 		dir.y = 0.0
 		dir = dir.normalized()
