@@ -75,16 +75,20 @@ void fragment() {
 	float slope = 1.0 - clamp(wnrm.y, 0.0, 1.0);
 	float h = v_wpos.y;
 
-	float m_rock = smoothstep(slope_rock, slope_rock + slope_blend, slope);
-	float m_snow = smoothstep(snow_level - snow_blend, snow_level + snow_blend, h) * (1.0 - smoothstep(0.7, 0.85, slope)) * snow_amount;
-	// sand covers the beach band + everything at/under the water line (applied last so it wins)
-	float m_sand = smoothstep(water_level + beach_height + beach_blend, water_level + beach_height, h);
-
-	// grass ground: large patches (anti-barren) + medium clumps + FINE blade noise (PC-style)
+	// noise samples first — several masks below use them as dither
 	float macro = tri_luma(tex_grass, v_wpos, wnrm, macro_scale);
 	float clump = tri_luma(tex_grass, v_wpos, wnrm, tile_scale);
 	float fine = tri_luma(tex_grass, v_wpos, wnrm, 0.55);
 	float bmacro = tri_luma(tex_rock, v_wpos, wnrm, macro_scale * 1.6);
+
+	// slope mask, DITHERED + widened: raw interpolated-normal slope flips along
+	// triangle edges and drew sawtooth rims on every cliff top/bottom — noise breaks
+	// the line up and the wide blend hides the per-triangle stepping
+	float slope_d = slope + (fine - 0.5) * 0.14 + (clump - 0.5) * 0.08;
+	float m_rock = smoothstep(slope_rock - 0.10, slope_rock + slope_blend + 0.12, slope_d);
+	float m_snow = smoothstep(snow_level - snow_blend, snow_level + snow_blend, h) * (1.0 - smoothstep(0.7, 0.85, slope_d)) * snow_amount;
+	// sand covers the beach band + everything at/under the water line (applied last so it wins)
+	float m_sand = smoothstep(water_level + beach_height + beach_blend, water_level + beach_height, h);
 	vec3 grass_col = mix(col_grass2, col_grass, smoothstep(0.30, 0.70, macro));
 	// biome tint: golden desert <- chartreuse plains -> deep jungle green.
 	// bio_d = biome value DITHERED by two noise scales, so boundaries interleave in
