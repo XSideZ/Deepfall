@@ -1166,35 +1166,99 @@ func _spawn_meteor(delay: float) -> void:
 	if not found:
 		return
 
-	var rock := MeshInstance3D.new()
+	# a PHYSICAL burning rock: dark tumbling core, fire-hot glow, and a long
+	# world-space flame trail — drifting slowly across the whole sky (PC style)
+	var rock := Node3D.new()
+	var core := MeshInstance3D.new()
 	var rm := SphereMesh.new()
-	rm.radius = 0.7
-	rm.height = 1.4
-	rock.mesh = rm
+	rm.radius = 1.1
+	rm.height = 2.0
+	rm.radial_segments = 9    # chunky low-poly = reads as rock, not a ball
+	rm.rings = 5
+	core.mesh = rm
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.55, 0.20)
+	mat.albedo_color = Color(0.16, 0.11, 0.09)   # charred stone
+	mat.roughness = 1.0
 	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.45, 0.10)
-	mat.emission_energy_multiplier = 4.0
-	rock.material_override = mat
+	mat.emission = Color(1.0, 0.38, 0.08)        # molten heat bleeding through
+	mat.emission_energy_multiplier = 2.4
+	core.material_override = mat
+	rock.add_child(core)
 	var glow := OmniLight3D.new()
 	glow.light_color = Color(1.0, 0.55, 0.2)
-	glow.light_energy = 2.0
-	glow.omni_range = 14.0
+	glow.light_energy = 3.0
+	glow.omni_range = 22.0
 	rock.add_child(glow)
+	# flame trail: world-space particles stream out behind the rock as it flies
+	var fire := GPUParticles3D.new()
+	fire.amount = 160
+	fire.lifetime = 2.2
+	fire.local_coords = false
+	fire.visibility_aabb = AABB(Vector3(-300, -300, -300), Vector3(600, 600, 600))
+	var fpm := ParticleProcessMaterial.new()
+	fpm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	fpm.emission_sphere_radius = 0.9
+	fpm.gravity = Vector3(0, 2.5, 0)          # flames curl upward off the trail
+	fpm.initial_velocity_min = 0.2
+	fpm.initial_velocity_max = 1.2
+	fpm.scale_min = 0.6
+	fpm.scale_max = 2.2
+	var fcurve := Curve.new()
+	fcurve.add_point(Vector2(0.0, 1.0))
+	fcurve.add_point(Vector2(1.0, 0.05))
+	var fct := CurveTexture.new()
+	fct.curve = fcurve
+	fpm.scale_curve = fct
+	var fgrad := Gradient.new()
+	fgrad.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+	fgrad.colors = PackedColorArray([Color(1.0, 0.85, 0.3, 0.9), Color(1.0, 0.35, 0.05, 0.6), Color(0.25, 0.1, 0.08, 0.0)])
+	var fgt := GradientTexture1D.new()
+	fgt.gradient = fgrad
+	fpm.color_ramp = fgt
+	fire.process_material = fpm
+	var fmesh := SphereMesh.new()
+	fmesh.radius = 0.5
+	fmesh.height = 1.0
+	var fmat := StandardMaterial3D.new()
+	fmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fmat.vertex_color_use_as_albedo = true
+	fmesh.material = fmat
+	fire.draw_pass_1 = fmesh
+	rock.add_child(fire)
 	add_child(rock)
-	rock.global_position = target + Vector3(randf_range(-70.0, -35.0), 95.0, randf_range(25.0, 55.0))
 
+	# long, shallow, SLOW arc across the sky (8-13s flight)
+	var start := target + Vector3(randf_range(-420.0, -260.0), randf_range(190.0, 260.0), randf_range(-320.0, 320.0))
+	var mid := (start + target) * 0.5 + Vector3(0, randf_range(30.0, 60.0), 0)
+	rock.global_position = start
+	var flight := randf_range(8.0, 13.0)
+	var spin := Vector3(randf_range(0.4, 1.2), randf_range(0.3, 0.9), randf_range(0.2, 0.7))
+	var fly := func(t: float) -> void:
+		if not is_instance_valid(rock):
+			return
+		var p01 := start.lerp(mid, t)
+		var p12 := mid.lerp(target, t)
+		rock.global_position = p01.lerp(p12, t)   # quadratic bezier arc
+		core.rotation += spin * 0.016              # slow tumble
 	var tw := create_tween()
-	tw.tween_property(rock, "global_position", target, 1.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_method(fly, 0.0, 1.0, flight).set_trans(Tween.TRANS_LINEAR)
 	await tw.finished
-	# impact: flash swells and fades, then a sky-crystal pops out
+	if not is_instance_valid(rock):
+		return
+	# impact: hot flash + the fire dies where it lands
+	fire.emitting = false
 	var flash_tw := create_tween()
-	flash_tw.tween_property(rock, "scale", Vector3(3.2, 3.2, 3.2), 0.18)
-	flash_tw.parallel().tween_property(mat, "emission_energy_multiplier", 0.0, 0.22)
-	flash_tw.parallel().tween_property(glow, "light_energy", 0.0, 0.25)
+	flash_tw.tween_property(core, "scale", Vector3(3.4, 3.4, 3.4), 0.16)
+	flash_tw.parallel().tween_property(mat, "emission_energy_multiplier", 9.0, 0.06)
+	flash_tw.chain().tween_property(mat, "emission_energy_multiplier", 0.0, 0.3)
+	flash_tw.parallel().tween_property(glow, "light_energy", 0.0, 0.35)
 	await flash_tw.finished
-	rock.queue_free()
+	# let straggler flame particles finish before freeing
+	await get_tree().create_timer(2.2).timeout
+	if is_instance_valid(rock):
+		rock.queue_free()
 	if audio:
 		audio.play("thud", 0.15, -12.0)
 	# with a 50-60 rock storm, only some impacts leave a meteorite shard (~1 in 4)
