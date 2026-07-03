@@ -86,6 +86,7 @@ func setup(ed) -> void:
 		_bloom_r_display = 0.0
 		_last_grown_r = 0.0
 		editor.set_bloom_field(bloom_origin, 0.0, 1.0)
+		editor.set_flora_front(bloom_origin, 0.0)   # carpet hidden until the seed blooms
 		_spawn_alien_seeds()
 	editor.set_game_water(editor.water_level)  # keep whatever was loaded
 	editor.spawn_player_for_game()

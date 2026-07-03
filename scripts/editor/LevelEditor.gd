@@ -35,6 +35,8 @@ var camera
 var terrain
 var flora
 var flora_density := 100   # percent
+var land_carpet
+var sea_carpet
 var resource_scatter
 var rock_count := 60
 var tree_count := 50
@@ -198,6 +200,14 @@ func _ready() -> void:
 	_build_terrain(grid_size)
 	flora = FloraScatterScript.new()
 	add_child(flora)
+	# dense near-field carpets: land grass + sea grass (GPU-placed, camera-following)
+	var GrassCarpetScript := load("res://scripts/editor/GrassCarpet.gd")
+	land_carpet = GrassCarpetScript.new()
+	add_child(land_carpet)
+	land_carpet.setup(0)
+	sea_carpet = GrassCarpetScript.new()
+	add_child(sea_carpet)
+	sea_carpet.setup(1)
 	resource_scatter = ResourceScatterScript.new()
 	add_child(resource_scatter)
 	resource_scatter.setup(self)
@@ -427,7 +437,8 @@ func _setup_terrain_material() -> void:
 	terrain_material.set_shader_parameter("snow_amount", 0.0)   # no snow by default
 	terrain_material.set_shader_parameter("water_level", water_level)
 
-## Push the biome map + world span to the terrain shader (after each generate).
+## Push the biome map + world span to the terrain shader AND the carpets
+## (after each generate/load).
 func _refresh_terrain_biome() -> void:
 	if terrain_material == null or terrain == null:
 		return
@@ -435,6 +446,11 @@ func _refresh_terrain_biome() -> void:
 	if bt:
 		terrain_material.set_shader_parameter("biome_map", bt)
 	terrain_material.set_shader_parameter("terrain_span", float(grid_size))
+	var hm = terrain.height_texture()
+	if land_carpet:
+		land_carpet.wire(hm, bt, float(grid_size))
+	if sea_carpet:
+		sea_carpet.wire(hm, bt, float(grid_size))
 
 func _build_terrain(n: int) -> void:
 	grid_size = n
@@ -1607,6 +1623,14 @@ func _toggle_rain() -> void:
 func _update_weather(delta: float) -> void:
 	# rain sheets follow the active camera; splashes hug the ground / water below it
 	var cam3d := get_viewport().get_camera_3d()
+	if cam3d:
+		# carpets ride with the camera; refresh the height texture after sculpts
+		if terrain and terrain.hm_dirty:
+			terrain.height_texture()   # updates in place (same RID all shaders sample)
+		if land_carpet:
+			land_carpet.follow(cam3d.global_position, _eff_water())
+		if sea_carpet:
+			sea_carpet.follow(cam3d.global_position, _eff_water())
 	if _underwater and underwater_bubbles and cam3d:
 		underwater_bubbles.global_position = cam3d.global_position + Vector3(0, -1.0, 0)
 		# depth grading: bright turquoise near the surface -> dark deep blue below
@@ -2400,6 +2424,8 @@ func plant_flora_field(origin: Vector2, radius: float) -> void:
 func set_flora_front(origin: Vector2, front: float) -> void:
 	if flora:
 		flora.set_grow_front(origin, front)
+	if land_carpet:
+		land_carpet.set_bloom(origin, front)
 
 ## Sprout living trees / wither dead ones out to `front` (throttled, incremental).
 func grow_trees_front(origin: Vector2, front: float, instant := false) -> void:
@@ -2498,6 +2524,7 @@ func load_world_from(dir: String) -> void:
 	if water and is_instance_valid(water):
 		water.position.y = water_level
 	terrain_material.set_shader_parameter("water_level", water_level)
+	_refresh_terrain_biome()   # re-wire height/biome textures for shaders + carpets
 	for p in data.get("props", []):
 		var id := String(p.get("id", ""))
 		if not lib.has_item(id) and id.begins_with("glb:"):
