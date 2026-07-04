@@ -234,7 +234,7 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 	region_n.seed = noise_seed + 4201
 	region_n.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	region_n.frequency = sections_across / float(grid)
-	region_n.fractal_octaves = 2
+	region_n.fractal_octaves = 1   # single octave = clean wandering borders, no sawtooth lips
 
 	biomes = PackedFloat32Array()
 	biomes.resize((grid + 1) * (grid + 1))
@@ -275,14 +275,25 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 			# a storm that crosses the boundary beaches you onto the next table.
 			#   T0 0.10 shore/forest  T1 0.18 forest  T2 0.34 desert
 			#   T3 0.56 forest 2      T4 0.80 snow summit
-			var reg := clampf(region_n.get_noise_2d(fx, fz) * 0.5 + 0.5, 0.0, 1.0)
-			reg = clampf((reg - 0.5) * 1.7 + 0.5, 0.0, 1.0)
-			var lvl_f := reg * 4.0
-			var lvl := int(floor(minf(lvl_f, 3.999)))
-			var lfrac := lvl_f - float(lvl)
+			# CONCENTRIC wedding-cake: rings by distance from the island centre —
+			# shore outside, snow crown in the middle. High tables can NEVER slope
+			# into the ocean; every band is fully enclosed by the band below it.
+			# Border warp is smooth single-octave noise -> clean lips, no spikes.
+			var rr_pos := Vector2(fx - half, fz - half).length() / half
+			rr_pos += region_n.get_noise_2d(fx, fz) * 0.10
+			var ring_edges: Array = [1.0, 0.78, 0.55, 0.34, 0.16, 0.0]
+			var lvl := 4
+			var lfrac := 0.0
+			for ri in 4:
+				if rr_pos <= ring_edges[ri] and rr_pos > ring_edges[ri + 1]:
+					lvl = ri
+					lfrac = (ring_edges[ri] - rr_pos) / (ring_edges[ri] - ring_edges[ri + 1])
+					break
+			var lvl_f := float(lvl) + lfrac
 			var terr: Array = [0.10, 0.18, 0.34, 0.56, 0.80]
-			var riser := smoothstep(0.90, 1.0, lfrac)   # ~10% of each band = sheer wall
-			var base_h: float = lerpf(terr[lvl], terr[lvl + 1], riser)
+			# clean slope across the table, then STRAIGHT DOWN at the inner edge
+			var riser := smoothstep(0.86, 0.985, lfrac)
+			var base_h: float = terr[4] if lvl >= 4 else lerpf(terr[lvl], terr[lvl + 1], riser)
 
 			# life on the tables: gentle hills + subtle buildable shelves, and jagged
 			# ridge crowns only on the snow summit table
@@ -296,7 +307,7 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 			var nx := (fx - half) / half
 			var nz := (fz - half) / half
 			var rr := sqrt(nx * nx + nz * nz)
-			var fall := 1.0 - smoothstep(0.55, 0.95, rr)
+			var fall := 1.0 - smoothstep(0.86, 1.0, rr)   # only the shore ring meets the sea
 			var idx := z * side + x
 			heights[idx] = lerpf(-16.0, height, fall)
 			# TIDAL-NOMAD biome sandwich by ELEVATION: beach (waterline sand band in the
