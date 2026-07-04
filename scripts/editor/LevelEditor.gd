@@ -2794,9 +2794,10 @@ func spawn_player_lowest() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(Session.meta.get("seed", 1)) + 77
 	for i in 500:
-		# the WEST beach strip — the staircase always starts there
-		var x := randf_range(-0.44, -0.30) * grid_size
-		var z := randf_range(-0.33, 0.33) * grid_size
+		var a := rng.randf() * TAU
+		var d := grid_size * 0.44 * sqrt(rng.randf())
+		var x := cos(a) * d
+		var z := sin(a) * d
 		var h: float = terrain.height_at(x, z)
 		if h > water_level + 0.8 and h < best.y:
 			best = Vector3(x, h, z)

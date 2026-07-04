@@ -44,7 +44,7 @@ func setup(ed) -> void:
 
 	# starting water: just below the forest band -> only beaches + forest 1 walkable
 	var amp: float = editor._terrain_amplitude()
-	var start_water: float = amp * 0.02   # lapping at the beach; basin floor holds a small lake
+	var start_water: float = amp * 0.10
 	tide_base = float(Session.meta.get("tide_base", start_water))
 	editor.water_level = float(Session.meta.get("water_now", tide_base))
 	editor.set_game_water(editor.water_level)
@@ -109,9 +109,7 @@ func _forecast_storm() -> void:
 ## peaks only drown after many, many natural storms.
 func _storm_target(kind: int) -> float:
 	var amp: float = editor._terrain_amplitude()
-	# staircase milestones: flood lower forest1 -> drown forest1+fill the basin
-	# lake -> eat the forest2 plateau; peaks (0.94+) stay the final refuge
-	var bands: Array = [amp * 0.12, amp * 0.32, amp * 0.48]
+	var bands: Array = [amp * 0.30, amp * 0.52, amp * 0.74]   # forest->desert->forest2->snow
 	var w: float = editor.water_level
 	var nxt: float = bands[bands.size() - 1] + 4.0
 	var after: float = nxt
@@ -122,9 +120,9 @@ func _storm_target(kind: int) -> float:
 			break
 	var t: float = w
 	match kind:
-		0: t = w + (nxt - w) * 0.5            # teaser: halfway up the cliff
-		1: t = nxt + amp * 0.05               # beaches you ONTO the next terrace
-		2: t = nxt + (after - nxt) * 0.5      # drowns the terrace deep
+		0: t = w + (nxt - w) * 0.5
+		1: t = nxt + 1.2
+		2: t = nxt + (after - nxt) * 0.5
 	return minf(t, amp * 0.80)   # snow summits stay the last refuge
 
 func _begin_storm() -> void:
