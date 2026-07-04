@@ -34,4 +34,9 @@ void fragment() {
 	ALBEDO = c.rgb;
 	ROUGHNESS = 0.9;
 	SPECULAR = 0.2;
+	// alpha-cutout leaves/petals: without this, transparent texels rendered as
+	// solid blocks (the "blocky red bushes"). A2C smooths the edges under MSAA.
+	ALPHA = c.a;
+	ALPHA_SCISSOR_THRESHOLD = 0.45;
+	ALPHA_ANTIALIASING_EDGE = 0.35;
 }

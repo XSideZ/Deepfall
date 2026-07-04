@@ -403,7 +403,9 @@ func _update_daynight(delta: float) -> void:
 		var half_secs := DAY_SECONDS if sin(day_phase * TAU) >= 0.0 else NIGHT_SECONDS
 		day_phase = fposmod(day_phase + delta / (2.0 * half_secs), 1.0)
 	var elev := sin(day_phase * TAU)             # >0 day, <0 night
-	_day_f = clampf(elev, 0.0, 1.0)
+	# steepened: full daylight for ~80% of the day instead of a slow sine ramp
+	# (Jay: "the lighting feels really dark a lot of the time")
+	_day_f = clampf(elev * 2.3, 0.0, 1.0)
 	var dusk := clampf(1.0 - absf(elev) * 2.8, 0.0, 1.0)   # warm band at sunrise/sunset (long golden hour)
 	sun.rotation_degrees = Vector3(-day_phase * 360.0, -42.0, 0.0)
 
@@ -711,6 +713,9 @@ func _make_placeable(visual: Node3D, id: String) -> StaticBody3D:
 	b.collision_mask = 0
 	b.add_child(visual)
 	b.set_meta("asset_id", id)
+	# depth-safe foliage everywhere (alpha scissor + A2C) — covers editor-placed
+	# props too, so NOTHING renders blocky leaves or sorts under the water plane
+	ResourceScatterScript.force_opaque(visual)
 	var aabb := _local_aabb(visual, Transform3D.IDENTITY)
 	var cs := CollisionShape3D.new()
 	var box := BoxShape3D.new()
@@ -2304,6 +2309,7 @@ func _build_ui() -> void:
 	grow.pressed.connect(_grow_grass)
 	sv.add_child(grow)
 	_slider(sv, "Flora density %", 0, 250, flora_density, 10, _on_flora_density)
+	_slider(sv, "Time of day %", 0, 100, int(day_phase * 100.0), 1, _on_time_slider)
 	sv.add_child(HSeparator.new())
 	var scat := Button.new(); scat.text = "Scatter resources"
 	scat.pressed.connect(_scatter_resources)
@@ -2756,6 +2762,14 @@ func _grow_grass() -> void:
 
 func _on_flora_density(v: float) -> void:
 	flora_density = int(v)
+
+## Time slider: scrub the sun to any hour (pauses the cycle so it stays put).
+func _on_time_slider(v: float) -> void:
+	day_phase = clampf(v / 100.0, 0.0, 0.999)
+	cycle_enabled = false
+	if time_button:
+		time_button.text = "Cycle: Paused"
+	_update_daynight(0.0)
 
 
 func _scatter_resources() -> void:

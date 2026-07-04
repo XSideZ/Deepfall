@@ -90,10 +90,9 @@ func setup(p_editor) -> void:
 	# the vine: even TALLER swaying kelp columns (ref-2 verticals)
 	_add_mesh_obj(kelps, "res://assets/props/kelp_long.obj", 8.5,
 		"res://assets/props/kelp_long_basecolor.png", Color.WHITE)
-	# desert set: 3 sandstone sizes + pink succulents
+	# desert set: 2 sandstone sizes (the big "shelter" looked off — cut) + succulents
 	_add_whole(desert_rocks, "res://assets/props/desert_rock_s.glb", 1.0)
 	_add_mesh_obj(desert_rocks, "res://assets/props/desert_rock_m.obj", 2.4, "", Color(0.82, 0.64, 0.42))
-	_add_mesh_obj(desert_rocks, "res://assets/props/desert_rock_l.obj", 5.0, "", Color(0.78, 0.58, 0.38))
 	_add_whole(succulents, "res://assets/props/succulent.glb", 0.7)
 	# nautilus shells wash up on beaches and rest on the seafloor
 	_add_whole(shells, "res://assets/props/nautilus.glb", 0.55)
@@ -358,7 +357,35 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 			placed += 1
 	_scatter(terrain, rng, sea_root, corals, coral_count, radius, "Coral", -1e9, water_level - 0.8, 1.0, Vector2(0.6, 1.6), -0.08)
 	_scatter(terrain, rng, sea_root, starfish, starfish_count, radius, "Biomass", -1e9, water_level - 0.5, 1.0, Vector2(0.7, 1.3), 0.0)
-	_scatter(terrain, rng, sea_root, kelps, kelp_count, radius, "Biomass", -1e9, water_level - 1.8, 1.0, Vector2(0.8, 1.5), -0.1)
+	# kelp grows in dense FORESTS: pick grove centres, pack 5-9 tall stalks tightly
+	# into each (ref look — walls of kelp, not one stalk every ten metres)
+	if not kelps.is_empty() and kelp_count > 0:
+		var groves := clampi(kelp_count / 5, 3, 16)
+		var gplaced := 0
+		var gtries := 0
+		while gplaced < groves and gtries < groves * 24:
+			gtries += 1
+			var ga := rng.randf() * TAU
+			var gd := radius * sqrt(rng.randf())
+			var gx := cos(ga) * gd
+			var gz := sin(ga) * gd
+			var gh: float = terrain.height_at(gx, gz)
+			if gh > water_level - 2.5 or gh < water_level - 14.0:
+				continue
+			var stalks := rng.randi_range(5, 9)
+			for j in stalks:
+				var px := gx + rng.randfn(0.0, 2.4)
+				var pz := gz + rng.randfn(0.0, 2.4)
+				var ph: float = terrain.height_at(px, pz)
+				if ph > water_level - 1.5:
+					continue
+				var body := _spawn(kelps[rng.randi_range(0, kelps.size() - 1)], "kelp", rng, Vector2(0.75, 1.5))
+				body.set_meta("resource_type", "Biomass")
+				body.set_meta("hits", 3)
+				sea_root.add_child(body)
+				body.global_position = Vector3(px, ph - 0.1, pz)
+				body.set_meta("base_scale", body.scale)
+			gplaced += 1
 	# nautilus shells resting on the seafloor
 	_scatter(terrain, rng, sea_root, shells, int(starfish_count * 0.5), radius, "Shell", -1e9, water_level - 0.6, 1.0, Vector2(0.7, 1.3), -0.02, Vector2.ZERO, 1e9, 0, null, Vector2(-1.0, 2.0), 1)
 
