@@ -514,6 +514,8 @@ func _scatter(terrain, rng: RandomNumberGenerator, parent: Node3D, pool: Array, 
 	if pool.is_empty() or count <= 0:
 		return
 	var my_gen := _gen
+	if not is_instance_valid(terrain) or not is_instance_valid(parent):
+		return   # world was rebuilt while an earlier scatter in this chain yielded
 	var min_space := 3.2 if resource == "Wood" else 2.2   # keep resources from stacking
 	var placed_pos: Array = occupied if occupied != null else []
 	var placed := 0

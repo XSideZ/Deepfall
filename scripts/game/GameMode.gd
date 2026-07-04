@@ -44,7 +44,7 @@ func setup(ed) -> void:
 
 	# starting water: just below the forest band -> only beaches + forest 1 walkable
 	var amp: float = editor._terrain_amplitude()
-	var start_water: float = amp * 0.10
+	var start_water: float = amp * 0.06   # below the T0 shore table
 	tide_base = float(Session.meta.get("tide_base", start_water))
 	editor.water_level = float(Session.meta.get("water_now", tide_base))
 	editor.set_game_water(editor.water_level)
@@ -120,9 +120,9 @@ func _storm_target(kind: int) -> float:
 			break
 	var t: float = w
 	match kind:
-		0: t = w + (nxt - w) * 0.5
-		1: t = nxt + 1.2
-		2: t = nxt + (after - nxt) * 0.5
+		0: t = w + (nxt - w) * 0.5            # teaser: halfway up the cliff
+		1: t = nxt + amp * 0.05               # beaches you ONTO the next terrace
+		2: t = nxt + (after - nxt) * 0.5      # drowns the terrace deep
 	return minf(t, amp * 0.80)   # snow summits stay the last refuge
 
 func _begin_storm() -> void:

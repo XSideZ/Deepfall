@@ -500,6 +500,8 @@ func _refresh_terrain_biome() -> void:
 
 func _build_terrain(n: int) -> void:
 	grid_size = n
+	if resource_scatter:
+		resource_scatter._gen += 1   # abort any yielded scatter against the old terrain
 	if flora:
 		flora.clear()
 	if resource_scatter:
