@@ -2560,6 +2560,7 @@ func flash_msg(s: String) -> void:
 # --- world-generation loading overlay (Huge maps take a while; keep it visible) ---
 var _load_layer: CanvasLayer
 var _load_label: Label
+var _load_bar: ProgressBar
 
 func _show_loading(msg: String) -> void:
 	if _load_layer == null:
@@ -2567,21 +2568,33 @@ func _show_loading(msg: String) -> void:
 		_load_layer.layer = 90
 		add_child(_load_layer)
 		var bg := ColorRect.new()
-		bg.color = Color(0.02, 0.05, 0.045, 0.92)
+		bg.color = Color(0.02, 0.05, 0.045, 0.94)
 		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 		_load_layer.add_child(bg)
+		var center := CenterContainer.new()
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_load_layer.add_child(center)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 16)
+		center.add_child(v)
 		_load_label = Label.new()
-		_load_label.set_anchors_preset(Control.PRESET_CENTER)
-		_load_label.add_theme_font_size_override("font_size", 26)
+		_load_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_load_label.add_theme_font_size_override("font_size", 28)
 		_load_label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.75))
-		_load_layer.add_child(_load_label)
+		v.add_child(_load_label)
+		_load_bar = ProgressBar.new()
+		_load_bar.custom_minimum_size = Vector2(440, 22)
+		_load_bar.min_value = 0.0
+		_load_bar.max_value = 100.0
+		_load_bar.show_percentage = true
+		v.add_child(_load_bar)
 	_load_layer.visible = true
 	_load_label.text = msg
-	_load_label.position = Vector2(-140, -20)
+	_load_bar.value = 0.0
 
 func _loading_progress(f: float) -> void:
-	if _load_label:
-		_load_label.text = "Growing the world...  %d%%" % int(f * 100.0)
+	if _load_bar:
+		_load_bar.value = f * 100.0
 
 func _hide_loading() -> void:
 	if _load_layer:

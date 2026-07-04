@@ -214,6 +214,7 @@ func _build_settings_panel() -> void:
 			Settings.data.res_h = r[1]
 			_apply())
 	_chk(v, "VSync", Settings.data.vsync, func(on): Settings.data.vsync = on; _apply())
+	_chk(v, "FPS counter", Settings.data.show_fps, func(on): Settings.data.show_fps = on; _apply())
 
 	_sec(v, "GRAPHICS")
 	_opt(v, "Anti-aliasing (MSAA)", ["Off", "2x", "4x", "8x"], int(Settings.data.msaa),

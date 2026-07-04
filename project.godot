@@ -26,7 +26,6 @@ Settings="*res://scripts/game/Settings.gd"
 
 gdscript/warnings/unused_parameter=0
 gdscript/warnings/integer_division=0
-file_logging/enable_file_logging.pc=true
 
 [display]
 

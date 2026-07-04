@@ -19,12 +19,32 @@ var data := {
 	"volume": 1.0,
 	"fov": 75.0,
 	"sensitivity": 1.0,
+	"show_fps": true,
 }
+
+var _fps_label: Label
 
 func _ready() -> void:
 	load_cfg()
 	apply_display()
 	apply_audio()
+	# FPS counter (top-right, all scenes)
+	var lay := CanvasLayer.new()
+	lay.layer = 95
+	add_child(lay)
+	_fps_label = Label.new()
+	_fps_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_fps_label.position = Vector2(-86, 8)
+	_fps_label.add_theme_font_size_override("font_size", 15)
+	_fps_label.add_theme_color_override("font_color", Color(0.6, 1.0, 0.75))
+	_fps_label.add_theme_constant_override("outline_size", 4)
+	_fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	lay.add_child(_fps_label)
+
+func _process(_d: float) -> void:
+	_fps_label.visible = bool(data.show_fps)
+	if _fps_label.visible:
+		_fps_label.text = "%d FPS" % Engine.get_frames_per_second()
 
 func _input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_F11:

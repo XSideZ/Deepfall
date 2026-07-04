@@ -404,11 +404,7 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 		placed_mesas += 1
 
 	# round off every crest, terrace lip, and warp artifact (fewer passes on huge grids)
-	if progress.is_valid():
-		progress.call(0.92)
-	if tree:
-		await tree.process_frame
-	_smooth_heights(2 if grid <= 768 else 1)
+	await _smooth_heights(2 if grid <= 768 else 1, tree, progress)
 	if progress.is_valid():
 		progress.call(1.0)
 
@@ -418,12 +414,20 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 
 ## Separable 5-tap gaussian blur over the heightmap — curves hill shoulders and
 ## terrace lips into smooth rolls while leaving broad shapes (cliffs, tiers) intact.
-func _smooth_heights(iterations: int) -> void:
+## Yields + reports progress (0.9 -> 1.0) — this pass froze the bar at "92%".
+func _smooth_heights(iterations: int, tree: SceneTree = null, progress := Callable()) -> void:
 	var side := grid + 1
 	var tmp := PackedFloat32Array()
 	tmp.resize(side * side)
+	var total_rows := float(iterations * side * 2)
+	var done_rows := 0.0
 	for _it in iterations:
 		for z in side:
+			if tree and (z % 64) == 0:
+				if progress.is_valid():
+					progress.call(0.9 + 0.1 * done_rows / total_rows)
+				await tree.process_frame
+			done_rows += 1.0
 			var row := z * side
 			for x in side:
 				var xm2 := row + clampi(x - 2, 0, grid)
@@ -433,6 +437,11 @@ func _smooth_heights(iterations: int) -> void:
 				tmp[row + x] = (heights[xm2] + 4.0 * heights[xm1] + 6.0 * heights[row + x] \
 					+ 4.0 * heights[xp1] + heights[xp2]) * 0.0625
 		for z in side:
+			if tree and (z % 64) == 0:
+				if progress.is_valid():
+					progress.call(0.9 + 0.1 * done_rows / total_rows)
+				await tree.process_frame
+			done_rows += 1.0
 			var zm2 := clampi(z - 2, 0, grid) * side
 			var zm1 := clampi(z - 1, 0, grid) * side
 			var zc := z * side
