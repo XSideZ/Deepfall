@@ -144,9 +144,9 @@ func _refresh_worlds() -> void:
 		row.add_theme_constant_override("separation", 8)
 		worlds_list.add_child(row)
 		var info := Label.new()
-		info.text = "%s   ·   %s  ·  Day %d  ·  bloom %d%%" % [
+		info.text = "%s   ·   %s  ·  Day %d  ·  tide %.0fm" % [
 			String(w.get("name", "?")), String(w.get("size", "?")),
-			int(w.get("day", 1)), int(float(w.get("terraform", 0.0)) * 100.0)]
+			int(w.get("day", 1)), float(w.get("tide_base", 0.0))]
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
 		var pb := Button.new()

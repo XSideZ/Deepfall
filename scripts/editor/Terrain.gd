@@ -4,6 +4,12 @@ extends Node3D
 ## non-uniform scale on it). Visual mesh is an ArrayMesh rebuilt per edit; only the
 ## touched region is recomputed on the CPU. Collision is a HeightMapShape3D.
 
+# Tidal-Nomad elevation bands (fractions of the generation amplitude):
+# below DESERT = forest 1, DESERT..FOREST2 = desert, FOREST2..SNOW = forest 2, above = snow
+const BAND_DESERT := 0.30
+const BAND_FOREST2 := 0.52
+const BAND_SNOW := 0.74
+
 # Sculpt modes (match LevelEditor tool ints)
 const RAISE := 0
 const LOWER := 1
@@ -244,28 +250,6 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 	cliffvar_n.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	cliffvar_n.frequency = sections_across * 0.75 / float(grid)
 
-	# GUARANTEED biome regions: desert + ice always exist, at seeded-random spots,
-	# as big radial blobs with noisy edges (noise gating alone skipped them on many seeds)
-	var rrng := RandomNumberGenerator.new()
-	rrng.seed = noise_seed + 99
-	var half_g := grid * 0.5
-	# desert and ice sit on OPPOSITE sides of the island, and their radii are capped
-	# so a guaranteed plains/jungle belt always runs between them (no thin slits)
-	var d_ang := rrng.randf() * TAU
-	var desert_c := Vector2.from_angle(d_ang) * half_g * rrng.randf_range(0.48, 0.56)
-	var ice_c := Vector2.from_angle(d_ang + PI + rrng.randf_range(-0.30, 0.30)) * half_g * rrng.randf_range(0.48, 0.56)
-	# minimum belt of green between the two — sized so that even after the ±33m edge
-	# noise pushes lobes in from both sides, a real corridor survives
-	var corridor := half_g * 0.46
-	# split the available span FAIRLY (desert slightly bigger) so ice never ends up
-	# with just the leftover scraps
-	var budget: float = maxf(desert_c.distance_to(ice_c) - corridor, half_g * 0.56)
-	var desert_r: float = clampf(budget * rrng.randf_range(0.50, 0.56), half_g * 0.26, half_g * 0.55)
-	var ice_r: float = clampf(budget - desert_r, half_g * 0.30, half_g * 0.50)
-	# blend band scales with each region so small regions keep a full-strength core
-	var d_band: float = minf(45.0, desert_r * 0.35)
-	var i_band: float = minf(45.0, ice_r * 0.35)
-
 	biomes = PackedFloat32Array()
 	biomes.resize((grid + 1) * (grid + 1))
 	var warp_amp := 20.0
@@ -283,23 +267,14 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 			# domain warp the sample position
 			var wx := fx + warp.get_noise_2d(fx, fz) * warp_amp
 			var wz := fz + warp.get_noise_2d(fx + 517.0, fz + 517.0) * warp_amp
-			# biome weights — highlands are a MINORITY (Jay: not >50% mountain). Most of the
-			# map is gently-shelved plains; jungle highlands are the rarer tall regions.
+			# TIDAL-NOMAD biomes are ELEVATION BANDS (assigned after height below);
+			# here only the plains/jungle mix shapes the terrain
 			var b01 := clampf(biome_n.get_noise_2d(fx, fz) * 0.5 + 0.5, 0.0, 1.0)
-			# stretch contrast: simplex is centre-heavy, so without this many seeds never
-			# reach the jungle tail at all
 			b01 = clampf((b01 - 0.5) * 1.8 + 0.5, 0.0, 1.0)
-			# desert + ice: radial regions with a WIDE, lobed transition band — big noise
-			# lobes push whole fingers of each biome into its neighbour, small noise
-			# roughs up the line, and the ~60m smoothstep lets ground colours cross-fade
-			var pv2 := Vector2(fx - half, fz - half)
-			var edge_n := biome_n.get_noise_2d(fx * 0.9, fz * 0.9) * 24.0 \
-				+ biome_n.get_noise_2d(fx * 3.5, fz * 3.5) * 9.0
-			var w_desert := 1.0 - smoothstep(desert_r - d_band, desert_r + 15.0, pv2.distance_to(desert_c) + edge_n)
-			var w_ice := 1.0 - smoothstep(ice_r - i_band, ice_r + 15.0, pv2.distance_to(ice_c) + edge_n)
-			w_desert *= 1.0 - w_ice   # ice wins any overlap (they're seeded far apart)
-			var w_jungle := smoothstep(0.58, 0.80, b01) * (1.0 - w_desert) * (1.0 - w_ice)
-			var w_plain: float = clampf(1.0 - w_desert - w_jungle - w_ice, 0.0, 1.0)
+			var w_desert := 0.0
+			var w_ice := 0.0
+			var w_jungle := smoothstep(0.55, 0.78, b01)
+			var w_plain: float = 1.0 - w_jungle
 
 			# rolling base hills
 			var b := clampf(n_base.get_noise_2d(wx, wz) * 0.5 + 0.5, 0.0, 1.0)
@@ -361,11 +336,17 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 			var fall := 1.0 - smoothstep(0.55, 0.95, rr)
 			var idx := z * side + x
 			heights[idx] = lerpf(-16.0, height, fall)
-			# biome scalar: 0.05 desert .. b01 plains/jungle .. 1.7 ice (texture filtering
-			# blends the boundaries into natural transition strips)
-			var bio_v := b01
-			bio_v = lerpf(bio_v, 0.05, w_desert)
-			bio_v = lerpf(bio_v, 1.7, w_ice)
+			# TIDAL-NOMAD biome sandwich by ELEVATION: beach (waterline sand band in the
+			# shader) -> forest -> desert -> forest 2 -> snow peaks; boundaries rippled
+			# by noise so bands wander instead of reading as contour lines
+			var hb := heights[idx] + biome_n.get_noise_2d(fx * 1.8, fz * 1.8) * amplitude * 0.045
+			var bio_v := 0.5                       # forest 1 (bright plains green)
+			if hb > amplitude * BAND_SNOW:
+				bio_v = 1.7                        # snow peaks
+			elif hb > amplitude * BAND_FOREST2:
+				bio_v = 1.0                        # forest 2 (deep jungle green)
+			elif hb > amplitude * BAND_DESERT:
+				bio_v = 0.05                       # desert belt
 			biomes[idx] = bio_v
 
 	# mesa buttes: wide flat-topped rock rises blended smoothly into the ground

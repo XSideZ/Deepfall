@@ -1159,7 +1159,11 @@ func _on_portal_crossed(went_inside: bool) -> void:
 
 # --- meteor showers (world event: sky-crystals rain down) -----------------------
 
+var meteors_enabled := false   # OFF for testing (Jay) — toolbar button flips it
+
 func _arm_meteors() -> void:
+	if not meteors_enabled:
+		return
 	meteor_timer.wait_time = randf_range(120.0, 240.0)
 	meteor_timer.start()
 
@@ -1167,6 +1171,8 @@ var _storm_active := false
 var _storm_mix := 0.0
 
 func _meteor_shower() -> void:
+	if not meteors_enabled:
+		return
 	if _storm_active:
 		return
 	_storm_active = true
@@ -1849,10 +1855,11 @@ func _update_weather(delta: float) -> void:
 					pm2.set_shader_parameter("heightmap", terrain.height_texture())
 	if rain_intensity > 0.0:
 		rain_time_left -= delta
-		# a full storm can push the tide ~18 m up — but it creeps, never surges
-		var cap := 3.0 + rain_intensity * 15.0
-		weather_offset = move_toward(weather_offset, cap, delta * cap / maxf(rain_duration * 1.7, 1.0))
-		if rain_time_left <= 0.0:
+		if game_mode == null:
+			# a full storm can push the tide ~18 m up — but it creeps, never surges
+			var cap := 3.0 + rain_intensity * 15.0
+			weather_offset = move_toward(weather_offset, cap, delta * cap / maxf(rain_duration * 1.7, 1.0))
+		if rain_time_left <= 0.0 and game_mode == null:
 			_end_rain()
 	elif weather_offset > 0.0:
 		# dry spell: the tide retreats slowly — and only ever down to the map's
@@ -2278,7 +2285,15 @@ func _build_ui() -> void:
 	time_button.pressed.connect(_toggle_time)
 	row.add_child(time_button)
 	row.add_child(VSeparator.new())
-	var metb := Button.new(); metb.text = "Meteors"; metb.pressed.connect(_meteor_shower); row.add_child(metb)
+	var metb := Button.new(); metb.text = "Meteors: Off"
+	metb.pressed.connect(func():
+		meteors_enabled = not meteors_enabled
+		metb.text = "Meteors: On" if meteors_enabled else "Meteors: Off"
+		if meteors_enabled:
+			_arm_meteors()
+		else:
+			meteor_timer.stop())
+	row.add_child(metb)
 	var rainb := Button.new(); rainb.text = "Rain"; rainb.pressed.connect(_toggle_rain); row.add_child(rainb)
 	var tstb := Button.new(); tstb.text = "Test (T)"; tstb.pressed.connect(_enter_test); row.add_child(tstb)
 	row.add_child(VSeparator.new())
@@ -2689,7 +2704,6 @@ func generate_world_for_game(seed_v: int, grid: int, barren_water_y: float) -> v
 	if water and is_instance_valid(water):
 		water.position.y = water_level
 	terrain_material.set_shader_parameter("water_level", water_level)
-	await scatter_barren_world()
 
 ## Push the spatial bloom field to the terrain shader (origin + spreading radius).
 func set_bloom_field(origin: Vector2, radius: float, cap: float) -> void:
@@ -2750,7 +2764,7 @@ func game_denser_fog() -> void:
 
 ## Drive the ocean level directly (barren -> birth -> rising tide).
 func set_game_water(v: float) -> void:
-	if absf(v - water_level) < 0.001:
+	if absf(v - water_level) < 0.000001:   # NOT 0.001: per-frame tide steps are ~0.0005
 		return
 	water_level = v
 	if water and is_instance_valid(water):
@@ -2771,6 +2785,35 @@ func spawn_player_for_game() -> void:
 	if camera.has_method("sync_from_rotation"):
 		camera.sync_from_rotation()
 	_enter_test()
+
+## Tidal Nomad start: the LOWEST walkable shore — beaches first, climb as it rises.
+func spawn_player_lowest() -> void:
+	var best := Vector3(0, 1e9, 0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(Session.meta.get("seed", 1)) + 77
+	for i in 500:
+		var a := rng.randf() * TAU
+		var d := grid_size * 0.44 * sqrt(rng.randf())
+		var x := cos(a) * d
+		var z := sin(a) * d
+		var h: float = terrain.height_at(x, z)
+		if h > water_level + 0.8 and h < best.y:
+			best = Vector3(x, h, z)
+	if best.y > 1e8:
+		best = Vector3(0, terrain.height_at(0, 0), 0)
+	camera.global_position = best + Vector3(0, 2.0, 0)
+	camera.rotation = Vector3(0, 0, 0)
+	if camera.has_method("sync_from_rotation"):
+		camera.sync_from_rotation()
+	_enter_test()
+
+func stop_rain_game() -> void:
+	_end_rain()
+
+## After a storm settles: sea life fills the newly-drowned band, land life
+## rescatters above the new waterline (silent, frame-yielding).
+func rescatter_after_tide() -> void:
+	await _scatter_resources(false)
 
 ## Serialize the whole world (terrain + props + build + home + inventory) into a
 ## world folder. Terraform/day live in meta.json (handled by GameMode).
@@ -2896,20 +2939,21 @@ func _on_time_slider(v: float) -> void:
 	_update_daynight(0.0)
 
 
-func _scatter_resources() -> void:
-	if game_mode:
-		return   # game mode owns its scatter via the bloom-front system
+func _scatter_resources(show_overlay := true) -> void:
 	if resource_scatter and terrain:
-		_show_loading(_tide_msg if _tide_msg != "" else "Scattering life...")
+		if show_overlay:
+			_show_loading(_tide_msg if _tide_msg != "" else "Scattering life...")
 		_tide_msg = ""
 		var mul := _area_mult()
 		await resource_scatter.rebuild_land(terrain, grid_size * 0.5, water_level,
 			int(rock_count * mul), int(tree_count * mul), int(satellite_count * mul),
 			0, Vector2.ZERO, 1e9, _terrain_amplitude() * 0.9)
-		_loading_progress(0.6)
+		if show_overlay:
+			_loading_progress(0.6)
 		await resource_scatter.rebuild_sea(terrain, grid_size * 0.5, water_level,
 			int(crystal_count * mul), int(coral_count * mul), int(starfish_count * mul), int(kelp_count * mul))
-		_hide_loading()
+		if show_overlay:
+			_hide_loading()
 
 func _on_rock_count(v: float) -> void:
 	rock_count = int(v)
