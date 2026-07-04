@@ -219,6 +219,7 @@ func _ready() -> void:
 	resource_scatter = ResourceScatterScript.new()
 	add_child(resource_scatter)
 	resource_scatter.setup(self)
+	resource_scatter.yield_tree = get_tree()   # rescatters yield frames (no freezes)
 	water_debounce = Timer.new()
 	water_debounce.one_shot = true
 	water_debounce.wait_time = 0.4
@@ -370,9 +371,11 @@ func _apply_sky() -> void:
 	elif sky_mode.begins_with("pano:"):
 		var path := "res://assets/sky/" + sky_mode.substr(5)
 		if ResourceLoader.exists(path):
-			var pano := PanoramaSkyMaterial.new()
-			pano.panorama = load(path)
-			env_sky.sky_material = pano
+			# panorama + the LIVE sun disc + day/night dimming (pano_sky shader)
+			var pano_sm := ShaderMaterial.new()
+			pano_sm.shader = load("res://scripts/editor/pano_sky.gdshader")
+			pano_sm.set_shader_parameter("pano", load(path))
+			env_sky.sky_material = pano_sm
 			env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 		else:
 			sky_mode = "dynamic"
@@ -425,8 +428,13 @@ func _update_daynight(delta: float) -> void:
 			"day_mult", (0.22 + 0.78 * _day_f) * dim)
 
 	var env := world_env.environment
-	# painted skybox: dim the whole panorama through the night (it's a static image)
-	env.background_energy_multiplier = (0.18 + 0.82 * _day_f) if sky_mode.begins_with("pano:") else 1.0
+	env.background_energy_multiplier = 1.0
+	# painted skybox: live sun disc + day/night dim through the pano_sky shader
+	if sky_mode.begins_with("pano:") and env_sky and env_sky.sky_material is ShaderMaterial:
+		var psm := env_sky.sky_material as ShaderMaterial
+		psm.set_shader_parameter("sun_dir", sun.global_transform.basis.z)
+		psm.set_shader_parameter("sun_color", col)
+		psm.set_shader_parameter("day_mult", (0.16 + 0.84 * _day_f) * dim)
 	if sky_mode == "space":
 		env.ambient_light_color = Color(0.30, 0.36, 0.52).lerp(Color(0.60, 0.68, 0.82), _day_f)
 		# midday ambient a touch lower than before -> sun shadows keep some depth
@@ -772,6 +780,9 @@ func _scale_by(f: float) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	# Esc always toggles out of test mode; while testing the player owns all other input.
 	if e is InputEventKey and e.pressed and not e.echo and e.keycode == KEY_ESCAPE:
+		if not testing:
+			_toggle_pause_panel()
+			return
 		if testing:
 			if build_menu_open:
 				_close_build_menu()
@@ -920,8 +931,8 @@ func _update_underwater() -> void:
 	if _underwater:
 		# turquoise depth fog (graded per frame in _update_weather) + god-ray volumetrics
 		env.fog_enabled = true
-		env.fog_density = 0.045
-		env.fog_light_color = Color(0.10, 0.46, 0.58)
+		env.fog_density = 0.026
+		env.fog_light_color = Color(0.13, 0.52, 0.62)
 		env.fog_sun_scatter = 0.0
 		env.volumetric_fog_enabled = true
 		env.volumetric_fog_density = 0.07
@@ -1823,8 +1834,8 @@ func _update_weather(delta: float) -> void:
 		# depth grading: bright turquoise near the surface -> dark deep blue below
 		var dep := clampf((_eff_water() - cam3d.global_position.y) / 26.0, 0.0, 1.0)
 		var env := world_env.environment
-		env.fog_density = lerpf(0.032, 0.075, dep)
-		env.fog_light_color = Color(0.14, 0.55, 0.66).lerp(Color(0.02, 0.10, 0.22), dep)
+		env.fog_density = lerpf(0.018, 0.05, dep)
+		env.fog_light_color = Color(0.16, 0.60, 0.70).lerp(Color(0.03, 0.14, 0.28), dep)
 		env.volumetric_fog_density = lerpf(0.085, 0.03, dep)   # rays strongest near the light
 	if rain_fx and cam3d:
 		rain_fx.global_position = cam3d.global_position + Vector3(0, 4.0, 0)
@@ -2600,6 +2611,61 @@ func _hide_loading() -> void:
 	if _load_layer:
 		_load_layer.visible = false
 
+# --- Esc pause panel (editor mode): resume / settings / menu / quit ---------------
+var _pause_layer: CanvasLayer
+
+func _toggle_pause_panel() -> void:
+	if _pause_layer and _pause_layer.visible:
+		_pause_layer.visible = false
+		return
+	if _pause_layer == null:
+		_pause_layer = CanvasLayer.new()
+		_pause_layer.layer = 85
+		add_child(_pause_layer)
+		var bg := ColorRect.new()
+		bg.color = Color(0.02, 0.05, 0.045, 0.85)
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_pause_layer.add_child(bg)
+		var center := CenterContainer.new()
+		center.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_pause_layer.add_child(center)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 10)
+		center.add_child(v)
+		var title := Label.new()
+		title.text = "PAUSED"
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.add_theme_font_size_override("font_size", 26)
+		title.add_theme_color_override("font_color", Color(0.55, 1.0, 0.75))
+		v.add_child(title)
+		var res_b := Button.new()
+		res_b.text = "Resume"
+		res_b.custom_minimum_size = Vector2(260, 40)
+		res_b.pressed.connect(func(): _pause_layer.visible = false)
+		v.add_child(res_b)
+		# full settings, live-applied (same UI as the main menu)
+		var scroll := ScrollContainer.new()
+		scroll.custom_minimum_size = Vector2(560, 420)
+		v.add_child(scroll)
+		var sv := VBoxContainer.new()
+		sv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(sv)
+		var SettingsUI := load("res://scripts/menu/SettingsUI.gd")
+		SettingsUI.build(sv, get_viewport(), func():
+			if world_env:
+				Settings.apply_env(world_env.environment))
+		var menu_b := Button.new()
+		menu_b.text = "Main menu"
+		menu_b.custom_minimum_size = Vector2(260, 40)
+		menu_b.pressed.connect(_exit_to_menu)
+		v.add_child(menu_b)
+		var quit_b := Button.new()
+		quit_b.text = "Quit"
+		quit_b.custom_minimum_size = Vector2(260, 40)
+		quit_b.pressed.connect(func(): get_tree().quit())
+		v.add_child(quit_b)
+	_pause_layer.visible = true
+
 func _exit_to_menu() -> void:
 	if game_mode:
 		game_mode.save_now()
@@ -2623,7 +2689,7 @@ func generate_world_for_game(seed_v: int, grid: int, barren_water_y: float) -> v
 	if water and is_instance_valid(water):
 		water.position.y = water_level
 	terrain_material.set_shader_parameter("water_level", water_level)
-	scatter_barren_world()
+	await scatter_barren_world()
 
 ## Push the spatial bloom field to the terrain shader (origin + spreading radius).
 func set_bloom_field(origin: Vector2, radius: float, cap: float) -> void:
@@ -2643,7 +2709,7 @@ func scatter_barren_world() -> void:
 	# vegetation bands aim at the DESIGN sea level in game mode (the ocean isn't
 	# born yet, but palms/shore plants must be right once it fills)
 	var veg_water := 8.0 if game_mode else maxf(water_level, 0.0)
-	resource_scatter.scatter_barren(terrain, map_r, maxf(water_level, 0.0),
+	await resource_scatter.scatter_barren(terrain, map_r, maxf(water_level, 0.0),
 		int(rock_count * mul), int((tree_count + 8) * mul), int(satellite_count * mul), int(tree_count * mul),
 		_terrain_amplitude() * 1.35, veg_water)
 	if flora:
@@ -2832,16 +2898,18 @@ func _on_time_slider(v: float) -> void:
 
 func _scatter_resources() -> void:
 	if game_mode:
-		# game mode owns scatter (bloom-driven); don't overwrite with the lush editor set
-		game_mode.set_bloom_world(game_mode.terraform)
-		return
+		return   # game mode owns its scatter via the bloom-front system
 	if resource_scatter and terrain:
+		_show_loading(_tide_msg if _tide_msg != "" else "Scattering life...")
+		_tide_msg = ""
 		var mul := _area_mult()
-		resource_scatter.rebuild_land(terrain, grid_size * 0.5, water_level,
+		await resource_scatter.rebuild_land(terrain, grid_size * 0.5, water_level,
 			int(rock_count * mul), int(tree_count * mul), int(satellite_count * mul),
 			0, Vector2.ZERO, 1e9, _terrain_amplitude() * 0.9)
-		resource_scatter.rebuild_sea(terrain, grid_size * 0.5, water_level,
+		_loading_progress(0.6)
+		await resource_scatter.rebuild_sea(terrain, grid_size * 0.5, water_level,
 			int(crystal_count * mul), int(coral_count * mul), int(starfish_count * mul), int(kelp_count * mul))
+		_hide_loading()
 
 func _on_rock_count(v: float) -> void:
 	rock_count = int(v)
@@ -2872,7 +2940,10 @@ func _select_tool(t: int) -> void:
 func _on_strength_changed(v: float) -> void:
 	brush_strength = v
 
+var _tide_msg := ""
+
 func _on_water_changed(v: float) -> void:
+	_tide_msg = "Raising the tide..." if v > water_level else "Lowering the tide..."
 	water_level = v
 	_last_eff_water = -1e9   # force the effective level (base + tide) to re-apply
 	_apply_eff_water()

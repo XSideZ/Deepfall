@@ -20,6 +20,9 @@ const SAT_A_PATH := "res://assets/props/satellite_a.glb"
 const SAT_B_PATH := "res://assets/props/satellite_b.glb"
 
 var editor                  # LevelEditor; provides _make_placeable()
+var yield_tree: SceneTree = null   # set by the editor: big rescatters yield frames
+var _gen := 0   # bumped per rebuild: stale yielded coroutines abort instead of
+                # touching freed terrain / double-spawning into a cleared root
 var land_root: Node3D
 var sea_root: Node3D
 
@@ -82,7 +85,7 @@ func setup(p_editor) -> void:
 		_add_whole(corals, p, 1.2)
 	corals.append_array(_variants(CORAL_SET_PATH, 1.2))
 	# new coral haul: big + small + orange + the 8-colour reef set
-	_add_whole(corals, "res://assets/props/coral_big.glb", 1.5)
+	_add_whole(corals, "res://assets/props/coral_big.glb", 0.9)
 	_add_whole(corals, "res://assets/props/coral_small2.glb", 0.9)
 	_add_whole(corals, "res://assets/props/coral_orange2.glb", 1.3)
 	corals.append_array(_variants_nodes("res://assets/props/coral_set3.glb", 1.2))
@@ -118,6 +121,8 @@ var dead_bodies: Array = []       # { body, pos: Vector2 }
 # shorelines are right once the ocean fills; -999 = use water_level).
 func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 		dead_count: int, sat_count: int, live_count: int, veg_max := 46.0, veg_water := -999.0) -> void:
+	_gen += 1
+	var my_gen := _gen
 	for n in land_root.get_children():
 		n.queue_free()
 	live_candidates.clear()
@@ -127,27 +132,31 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 	rng.seed = 913377
 	# one shared spacing set for EVERYTHING on land so no two props stack
 	var tree_pos: Array = []
-	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 1.35))
-	_scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, tree_pos)
+	await _scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(0.32, 1.35))
+	await _scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, tree_pos)
 	# the desert is ALIVE even in the barren world — cacti (graze) + blooms (fruit)
 	# + sandstone rocks in 3 sizes + pink succulents
-	_scatter(terrain, rng, land_root, cacti, int(dead_count * 0.6), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
-	_scatter(terrain, rng, land_root, blooms, int(dead_count * 0.4), radius, "Fruit", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30), 1)
-	_scatter(terrain, rng, land_root, desert_rocks, int(rock_count * 0.6), radius, "Stone", vw + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
-	_scatter(terrain, rng, land_root, succulents, int(dead_count * 0.35), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.04, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
+	await _scatter(terrain, rng, land_root, cacti, int(dead_count * 0.6), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
+	await _scatter(terrain, rng, land_root, blooms, int(dead_count * 0.4), radius, "Fruit", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30), 1)
+	await _scatter(terrain, rng, land_root, desert_rocks, int(rock_count * 0.6), radius, "Stone", vw + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
+	await _scatter(terrain, rng, land_root, succulents, int(dead_count * 0.35), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.04, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
 	# nautilus shells along every beach (sea-side spawns handle the seafloor ones)
-	_scatter(terrain, rng, land_root, shells, int(rock_count * 0.25), radius, "Shell", vw + 0.3, vw + 2.2, 0.5, Vector2(0.7, 1.3), -0.03, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 1.35), 1)
+	await _scatter(terrain, rng, land_root, shells, int(rock_count * 0.25), radius, "Shell", vw + 0.3, vw + 2.2, 0.5, Vector2(0.7, 1.3), -0.03, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 1.35), 1)
 	# the ICE is a frozen world of its own from day one: snowy rocks + snowy dead
 	# trees + the true Crystal, which only grows in the snow
-	_scatter(terrain, rng, land_root, snow_rocks, int(rock_count * 0.5), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
-	_scatter(terrain, rng, land_root, snow_dead, int(dead_count * 0.7), radius, "Wood", water_level + 1.5, veg_max, 0.6, Vector2(0.8, 1.4), -0.35, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
-	_scatter(terrain, rng, land_root, ice_crystals, int(rock_count * 0.35), radius, "Crystal", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
+	await _scatter(terrain, rng, land_root, snow_rocks, int(rock_count * 0.5), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
+	await _scatter(terrain, rng, land_root, snow_dead, int(dead_count * 0.7), radius, "Wood", water_level + 1.5, veg_max, 0.6, Vector2(0.8, 1.4), -0.35, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
+	await _scatter(terrain, rng, land_root, ice_crystals, int(rock_count * 0.35), radius, "Crystal", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
 	# dead trees across the whole barren island; remember each so the bloom can wither it
 	if not dead_trees.is_empty():
 		var placed := 0
 		var attempts := 0
 		while placed < dead_count and attempts < dead_count * 20:
 			attempts += 1
+			if yield_tree and (attempts % 150) == 0:
+				await yield_tree.process_frame
+				if my_gen != _gen or not is_instance_valid(terrain):
+					return
 			var a := rng.randf() * TAU
 			var d := radius * sqrt(rng.randf())
 			var x := cos(a) * d
@@ -175,6 +184,10 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 		var tries := 0
 		while live_candidates.size() < live_count and tries < live_count * 22:
 			tries += 1
+			if yield_tree and (tries % 200) == 0:
+				await yield_tree.process_frame
+				if my_gen != _gen or not is_instance_valid(terrain):
+					return
 			var a := rng.randf() * TAU
 			var d := radius * sqrt(rng.randf())
 			var x := cos(a) * d
@@ -279,45 +292,49 @@ func _sprout_live_tree(c: Dictionary, instant: bool) -> void:
 
 func rebuild_land(terrain, radius: float, water_level: float, rock_count: int, tree_count: int, sat_count: int,
 		dead_count := 0, bloom_center := Vector2.ZERO, bloom_radius := 1.0e9, veg_max := 46.0) -> void:
+	_gen += 1
+	var my_gen := _gen
 	for n in land_root.get_children():
 		n.queue_free()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 913377
 	var occ: Array = []   # shared spacing set so nothing stacks
 	# rocks: anywhere on land off the beach (ice gets its own snowy rocks)
-	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 1.35))
+	await _scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, occ, Vector2(0.32, 1.35))
 	# living trees: inland + off-desert/ice, inside the bloom; PALMS own the shoreline band
-	_scatter(terrain, rng, land_root, trees, tree_count, radius, "Wood", water_level + 6.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
+	await _scatter(terrain, rng, land_root, trees, tree_count, radius, "Wood", water_level + 6.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
 		bloom_center, bloom_radius, 1, occ, Vector2(0.28, 1.35))
-	_scatter(terrain, rng, land_root, palms, int(tree_count * 0.5), radius, "Wood", water_level + 1.2, water_level + 6.0, 0.5, Vector2(0.8, 1.3), -0.35,
+	await _scatter(terrain, rng, land_root, palms, int(tree_count * 0.5), radius, "Wood", water_level + 1.2, water_level + 6.0, 0.5, Vector2(0.8, 1.3), -0.35,
 		bloom_center, bloom_radius, 1, occ, Vector2(-1.0, 1.35))
 	# desert: cacti (graze) + desert blooms (fruit) + sandstone rocks + succulents
-	_scatter(terrain, rng, land_root, cacti, int(tree_count * 0.6), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08,
+	await _scatter(terrain, rng, land_root, cacti, int(tree_count * 0.6), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
-	_scatter(terrain, rng, land_root, blooms, int(tree_count * 0.4), radius, "Fruit", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05,
+	await _scatter(terrain, rng, land_root, blooms, int(tree_count * 0.4), radius, "Fruit", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30), 1)
-	_scatter(terrain, rng, land_root, desert_rocks, int(rock_count * 0.6), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10,
+	await _scatter(terrain, rng, land_root, desert_rocks, int(rock_count * 0.6), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
-	_scatter(terrain, rng, land_root, succulents, int(tree_count * 0.35), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.04,
+	await _scatter(terrain, rng, land_root, succulents, int(tree_count * 0.35), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.04,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
-	_scatter(terrain, rng, land_root, shells, int(rock_count * 0.25), radius, "Shell", water_level + 0.3, water_level + 2.2, 0.5, Vector2(0.7, 1.3), -0.03,
+	await _scatter(terrain, rng, land_root, shells, int(rock_count * 0.25), radius, "Shell", water_level + 0.3, water_level + 2.2, 0.5, Vector2(0.7, 1.3), -0.03,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 1.35), 1)
 	# ice: snowy trees/rocks/dead trees + the true Crystal
-	_scatter(terrain, rng, land_root, snow_trees, int(tree_count * 0.6), radius, "Wood", water_level + 2.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
+	await _scatter(terrain, rng, land_root, snow_trees, int(tree_count * 0.6), radius, "Wood", water_level + 2.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
 		bloom_center, bloom_radius, 1, occ, Vector2(1.40, 3.0))
-	_scatter(terrain, rng, land_root, snow_rocks, int(rock_count * 0.5), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.8), -0.06,
+	await _scatter(terrain, rng, land_root, snow_rocks, int(rock_count * 0.5), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.8), -0.06,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(1.40, 3.0))
-	_scatter(terrain, rng, land_root, snow_dead, int(tree_count * 0.5), radius, "Wood", water_level + 1.5, veg_max, 0.6, Vector2(0.8, 1.4), -0.35,
+	await _scatter(terrain, rng, land_root, snow_dead, int(tree_count * 0.5), radius, "Wood", water_level + 1.5, veg_max, 0.6, Vector2(0.8, 1.4), -0.35,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(1.40, 3.0))
-	_scatter(terrain, rng, land_root, ice_crystals, int(rock_count * 0.35), radius, "Crystal", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10,
+	await _scatter(terrain, rng, land_root, ice_crystals, int(rock_count * 0.35), radius, "Crystal", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(1.40, 3.0))
 	# dead trees: OUTSIDE the bloom (the barren wastes); tolerate steeper/higher ground
-	_scatter(terrain, rng, land_root, dead_trees, dead_count, radius, "Wood", water_level + 2.0, veg_max, 0.6, Vector2(0.8, 1.4), -0.45,
+	await _scatter(terrain, rng, land_root, dead_trees, dead_count, radius, "Wood", water_level + 2.0, veg_max, 0.6, Vector2(0.8, 1.4), -0.45,
 		bloom_center, bloom_radius, 2, occ, Vector2(0.28, 1.35))
 	# satellites: crash-landed debris (mixed designs) — the land source of Metal
-	_scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, occ)
+	await _scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, occ)
 
 func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int, coral_count: int, starfish_count: int, kelp_count: int) -> void:
+	_gen += 1
+	var my_gen := _gen
 	for n in sea_root.get_children():
 		n.queue_free()
 	var rng := RandomNumberGenerator.new()
@@ -336,7 +353,7 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 		if ch < water_level - 1.5 and ch > water_level - 6.0:
 			cove_centers.append(Vector2(cx, cz))
 	if cove_centers.is_empty():
-		_scatter(terrain, rng, sea_root, quartz, crystal_count, radius, "Quartz", -1e9, water_level - 1.2, 1.0, Vector2(0.7, 1.8), -0.12)
+		await _scatter(terrain, rng, sea_root, quartz, crystal_count, radius, "Quartz", -1e9, water_level - 1.2, 1.0, Vector2(0.7, 1.8), -0.12)
 	else:
 		var placed := 0
 		var attempts := 0
@@ -355,8 +372,8 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 			body.global_position = Vector3(x, h - 0.12, z)
 			body.set_meta("base_scale", body.scale)
 			placed += 1
-	_scatter(terrain, rng, sea_root, corals, coral_count, radius, "Coral", -1e9, water_level - 0.8, 1.0, Vector2(0.6, 1.6), -0.08)
-	_scatter(terrain, rng, sea_root, starfish, starfish_count, radius, "Biomass", -1e9, water_level - 0.5, 1.0, Vector2(0.7, 1.3), 0.0)
+	await _scatter(terrain, rng, sea_root, corals, coral_count, radius, "Coral", -1e9, water_level - 0.8, 1.0, Vector2(0.6, 1.6), -0.08)
+	await _scatter(terrain, rng, sea_root, starfish, starfish_count, radius, "Biomass", -1e9, water_level - 0.5, 1.0, Vector2(0.7, 1.3), 0.0)
 	# kelp grows in dense FORESTS: pick grove centres, pack 5-9 tall stalks tightly
 	# into each (ref look — walls of kelp, not one stalk every ten metres)
 	if not kelps.is_empty() and kelp_count > 0:
@@ -365,6 +382,10 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 		var gtries := 0
 		while gplaced < groves and gtries < groves * 24:
 			gtries += 1
+			if yield_tree and (gtries % 8) == 0:
+				await yield_tree.process_frame
+				if my_gen != _gen or not is_instance_valid(terrain):
+					return
 			var ga := rng.randf() * TAU
 			var gd := radius * sqrt(rng.randf())
 			var gx := cos(ga) * gd
@@ -387,7 +408,7 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 				body.set_meta("base_scale", body.scale)
 			gplaced += 1
 	# nautilus shells resting on the seafloor
-	_scatter(terrain, rng, sea_root, shells, int(starfish_count * 0.5), radius, "Shell", -1e9, water_level - 0.6, 1.0, Vector2(0.7, 1.3), -0.02, Vector2.ZERO, 1e9, 0, null, Vector2(-1.0, 2.0), 1)
+	await _scatter(terrain, rng, sea_root, shells, int(starfish_count * 0.5), radius, "Shell", -1e9, water_level - 0.6, 1.0, Vector2(0.7, 1.3), -0.02, Vector2.ZERO, 1e9, 0, null, Vector2(-1.0, 2.0), 1)
 
 ## A crystal delivered by a meteor impact — harvestable like any scattered resource.
 ## Meteor impacts leave glowing RED "Meteorite Shard" resources (a red crystal variant).
@@ -489,15 +510,20 @@ func _exit_tree() -> void:
 func _scatter(terrain, rng: RandomNumberGenerator, parent: Node3D, pool: Array, count: int, radius: float,
 		resource: String, min_h: float, max_h: float, max_slope: float, scale_range: Vector2, sink: float,
 		bloom_center := Vector2.ZERO, bloom_radius := 1.0e9, bloom_mode := 0, occupied = null,
-		biome_rng := Vector2(-1.0, 2.0), hits := 3) -> void:
+		biome_rng := Vector2(-1.0, 2.0), hits := 3, tree: SceneTree = null) -> void:
 	if pool.is_empty() or count <= 0:
 		return
+	var my_gen := _gen
 	var min_space := 3.2 if resource == "Wood" else 2.2   # keep resources from stacking
 	var placed_pos: Array = occupied if occupied != null else []
 	var placed := 0
 	var attempts := 0
 	while placed < count and attempts < count * 20:
 		attempts += 1
+		if yield_tree and (attempts % 150) == 0:
+			await yield_tree.process_frame   # big rescatters keep the window alive
+			if my_gen != _gen or not is_instance_valid(terrain) or not is_instance_valid(parent):
+				return   # a newer rebuild superseded this one mid-flight
 		var a := rng.randf() * TAU
 		var d := radius * sqrt(rng.randf())
 		var x := cos(a) * d

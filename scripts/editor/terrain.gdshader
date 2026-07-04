@@ -21,7 +21,7 @@ uniform vec3 col_snow : source_color = vec3(0.93, 0.95, 0.99);
 uniform sampler2D biome_map : filter_linear;
 uniform float terrain_span = 512.0;
 uniform float snow_amount = 0.0;
-uniform vec3 col_grass_desert : source_color = vec3(0.95, 0.82, 0.52);  // HOT golden desert sand (beach band keeps its pale col_sand; they blend at the coast)
+uniform vec3 col_grass_desert : source_color = vec3(1.0, 0.88, 0.55);  // HOT golden desert sand (beach band keeps its pale col_sand; they blend at the coast)
 uniform vec3 col_grass_jungle : source_color = vec3(0.19, 0.53, 0.13);  // deep saturated jungle
 uniform vec3 col_rock_grey : source_color = vec3(0.50, 0.50, 0.54);     // grey cliff stone
 
@@ -97,10 +97,12 @@ void fragment() {
 	float bio_d = bio + (bmacro - 0.5) * 0.28 + (clump - 0.5) * 0.10;
 	grass_col = mix(col_grass_desert, grass_col, smoothstep(0.18, 0.50, bio_d));
 	grass_col = mix(grass_col, col_grass_jungle, smoothstep(0.56, 0.84, bio_d));
-	// detail centred on 1.0 so texture variation never darkens the palette overall
+	// detail centred on 1.0 so texture variation never darkens the palette overall.
+	// sand stays SMOOTH + bright: the grass clump/blade darkening turned the desert
+	// muddy-brown from most angles — fade it out where the ground is sand.
 	float clump_d = 1.0 + (smoothstep(0.28, 0.72, clump) - 0.5) * 0.34;
 	float fine_d = 1.0 + (smoothstep(0.35, 0.65, fine) - 0.5) * 0.58;
-	grass_col *= mix(1.0, clump_d * fine_d, grass_texture);
+	grass_col *= mix(1.0, clump_d * fine_d, grass_texture * smoothstep(0.22, 0.50, bio_d));
 
 	// spatial bloom: distance from the seed, pushed around by noise so life creeps in
 	// ragged patches rather than a clean circle

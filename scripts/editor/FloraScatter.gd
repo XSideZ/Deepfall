@@ -91,7 +91,10 @@ func _ready() -> void:
 		var ab: AABB = (found.xf as Transform3D) * mesh.get_aabb()
 		var native: float = ab.size.y if String(e.dim) == "h" else ab.size[ab.size.max_axis_index()]
 		var norm: float = float(e.h) / maxf(native, 0.001)
-		_apply_sway(mesh, float(e.sway), mesh.get_aabb().size.y, solid)
+		# sway amplitude is applied in MESH-LOCAL units by the shader, so divide the
+		# intended WORLD amplitude by the instance scale — GLBs with tiny native
+		# scale otherwise churned metres wide (the spinning stretched flower)
+		_apply_sway(mesh, float(e.sway) / maxf(norm, 0.001) * 0.35, mesh.get_aabb().size.y, solid)
 		var mmi := MultiMeshInstance3D.new()
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D

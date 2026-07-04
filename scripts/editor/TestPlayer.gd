@@ -70,8 +70,8 @@ var _was_floor := true
 
 func _ready() -> void:
 	var caps := CapsuleShape3D.new()
-	caps.radius = 0.4
-	caps.height = 1.8
+	caps.radius = 0.16   # slim: stop snagging on every prop (Jay)
+	caps.height = 1.7
 	var col := CollisionShape3D.new()
 	col.shape = caps
 	col.position.y = 0.9
