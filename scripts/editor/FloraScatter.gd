@@ -38,6 +38,15 @@ const ENTRIES := [
 	{ "f": "Petal_5.fbx", "n": 200, "h": 0.10, "dim": "max", "s": Vector2(0.7, 1.4), "patch": 0.15, "sway": 0.02 },
 	{ "f": "Mushroom_Common.fbx", "n": 140, "h": 0.30, "dim": "h", "s": Vector2(0.7, 1.4), "patch": 0.35, "sway": 0.0 },
 	{ "f": "Mushroom_Laetiporus.fbx", "n": 60, "h": 0.35, "dim": "h", "s": Vector2(0.7, 1.3), "patch": 0.35, "sway": 0.0 },
+	# Jay's GLB flowers: one single + the 7-flower pack (one entry per bloom)
+	{ "path": "res://assets/props/flower_single.glb", "n": 150, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.15, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 0, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 1, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 2, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 3, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 4, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 5, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 6, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
 	# stones (no wind, obviously) — allowed everywhere including the desert
 	{ "f": "Pebble_Round_1.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
 	{ "f": "Pebble_Round_2.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
@@ -63,14 +72,15 @@ func _ready() -> void:
 	_noise.seed = 5711
 	var nat: Dictionary = ResourceScatterScript.nature_index()
 	for e in ENTRIES:
-		var path: String = nat.get(e.f, "")
+		# entries name a pack FBX ("f") or point straight at a GLB ("path" + "mi")
+		var path: String = e.get("path", nat.get(e.get("f", ""), ""))
 		if path == "" or not ResourceLoader.exists(path):
 			continue
 		var ps = load(path)
 		if not (ps is PackedScene):
 			continue
 		var inst: Node = (ps as PackedScene).instantiate()
-		var found := _first_mesh(inst, Transform3D())
+		var found := _nth_mesh(inst, int(e.get("mi", 0)))
 		if found.is_empty():
 			inst.free()
 			continue
@@ -114,6 +124,23 @@ func set_grow_front(origin: Vector2, front: float) -> void:
 	for m in _sway_mats:
 		m.set_shader_parameter("bloom_origin", origin)
 		m.set_shader_parameter("bloom_front", front)
+
+## Mesh + xform of the Nth MeshInstance3D in the scene (multi-flower packs).
+func _nth_mesh(n: Node, i: int) -> Dictionary:
+	var acc: Array = []
+	_collect(n, Transform3D(), acc)
+	if acc.is_empty():
+		return {}
+	return acc[clampi(i, 0, acc.size() - 1)]
+
+func _collect(n: Node, xf: Transform3D, out: Array) -> void:
+	var local := xf
+	if n is Node3D:
+		local = xf * (n as Node3D).transform
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		out.append({ "mesh": (n as MeshInstance3D).mesh, "xf": local })
+	for c in n.get_children():
+		_collect(c, local, out)
 
 ## Mesh + accumulated transform of the first MeshInstance3D in the scene.
 func _first_mesh(n: Node, xf: Transform3D) -> Dictionary:

@@ -39,6 +39,9 @@ var corals: Array = []
 var kelps: Array = []
 var starfish: Array = []
 var satellites: Array = []   # both designs, mixed by the scatter
+var desert_rocks: Array = [] # 3 sandstone sizes (desert-only Stone)
+var succulents: Array = []   # pink succulent (desert Biomass)
+var shells: Array = []       # nautilus — beaches + seafloor
 
 func setup(p_editor) -> void:
 	editor = p_editor
@@ -78,14 +81,30 @@ func setup(p_editor) -> void:
 	for p in CORAL_WHOLE_PATHS:
 		_add_whole(corals, p, 1.2)
 	corals.append_array(_variants(CORAL_SET_PATH, 1.2))
+	# new coral haul: big + small + orange + the 8-colour reef set
+	_add_whole(corals, "res://assets/props/coral_big.glb", 1.5)
+	_add_whole(corals, "res://assets/props/coral_small2.glb", 0.9)
+	_add_whole(corals, "res://assets/props/coral_orange2.glb", 1.3)
+	corals.append_array(_variants_nodes("res://assets/props/coral_set3.glb", 1.2))
 	_add_whole(kelps, KELP_PATH, 5.4)   # LONG kelp towers (underwater ref look)
+	# the vine: even TALLER swaying kelp columns (ref-2 verticals)
+	_add_mesh_obj(kelps, "res://assets/props/kelp_long.obj", 8.5,
+		"res://assets/props/kelp_long_basecolor.png", Color.WHITE)
+	# desert set: 3 sandstone sizes + pink succulents
+	_add_whole(desert_rocks, "res://assets/props/desert_rock_s.glb", 1.0)
+	_add_mesh_obj(desert_rocks, "res://assets/props/desert_rock_m.obj", 2.4, "", Color(0.82, 0.64, 0.42))
+	_add_mesh_obj(desert_rocks, "res://assets/props/desert_rock_l.obj", 5.0, "", Color(0.78, 0.58, 0.38))
+	_add_whole(succulents, "res://assets/props/succulent.glb", 0.7)
+	# nautilus shells wash up on beaches and rest on the seafloor
+	_add_whole(shells, "res://assets/props/nautilus.glb", 0.55)
 	starfish = _variants(STARFISH_PATH, 0.45)
 	_add_whole(satellites, SAT_A_PATH, 2.8)
 	_add_whole(satellites, SAT_B_PATH, 2.8)
-	print("ResourceScatter pools: rocks=%d trees=%d dead=%d palms=%d cacti=%d blooms=%d snowT=%d snowR=%d snowD=%d iceC=%d corals=%d starfish=%d kelp=%d quartz=%d" %
+	print("ResourceScatter pools: rocks=%d trees=%d dead=%d palms=%d cacti=%d blooms=%d snowT=%d snowR=%d snowD=%d iceC=%d corals=%d starfish=%d kelp=%d quartz=%d drock=%d succ=%d shell=%d" %
 		[rocks.size(), trees.size(), dead_trees.size(), palms.size(), cacti.size(), blooms.size(),
 		snow_trees.size(), snow_rocks.size(), snow_dead.size(), ice_crystals.size(),
-		corals.size(), starfish.size(), kelps.size(), quartz.size()])
+		corals.size(), starfish.size(), kelps.size(), quartz.size(),
+		desert_rocks.size(), succulents.size(), shells.size()])
 
 # --- rebuilds ------------------------------------------------------------------
 
@@ -112,8 +131,13 @@ func scatter_barren(terrain, radius: float, water_level: float, rock_count: int,
 	_scatter(terrain, rng, land_root, rocks, rock_count, radius, "Stone", water_level + 1.5, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 1.35))
 	_scatter(terrain, rng, land_root, satellites, sat_count, radius, "Metal", water_level + 1.5, 1e9, 0.7, Vector2(0.8, 1.2), 0.1, Vector2.ZERO, 1e9, 0, tree_pos)
 	# the desert is ALIVE even in the barren world — cacti (graze) + blooms (fruit)
+	# + sandstone rocks in 3 sizes + pink succulents
 	_scatter(terrain, rng, land_root, cacti, int(dead_count * 0.6), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
 	_scatter(terrain, rng, land_root, blooms, int(dead_count * 0.4), radius, "Fruit", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30), 1)
+	_scatter(terrain, rng, land_root, desert_rocks, int(rock_count * 0.6), radius, "Stone", vw + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
+	_scatter(terrain, rng, land_root, succulents, int(dead_count * 0.35), radius, "Biomass", vw + 1.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.04, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 0.30))
+	# nautilus shells along every beach (sea-side spawns handle the seafloor ones)
+	_scatter(terrain, rng, land_root, shells, int(rock_count * 0.25), radius, "Shell", vw + 0.3, vw + 2.2, 0.5, Vector2(0.7, 1.3), -0.03, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(-1.0, 1.35), 1)
 	# the ICE is a frozen world of its own from day one: snowy rocks + snowy dead
 	# trees + the true Crystal, which only grows in the snow
 	_scatter(terrain, rng, land_root, snow_rocks, int(rock_count * 0.5), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.8), -0.06, Vector2.ZERO, 1e9, 0, tree_pos, Vector2(1.40, 3.0))
@@ -268,11 +292,17 @@ func rebuild_land(terrain, radius: float, water_level: float, rock_count: int, t
 		bloom_center, bloom_radius, 1, occ, Vector2(0.28, 1.35))
 	_scatter(terrain, rng, land_root, palms, int(tree_count * 0.5), radius, "Wood", water_level + 1.2, water_level + 6.0, 0.5, Vector2(0.8, 1.3), -0.35,
 		bloom_center, bloom_radius, 1, occ, Vector2(-1.0, 1.35))
-	# desert: cacti (graze) + desert blooms (fruit, picked in one hit)
+	# desert: cacti (graze) + desert blooms (fruit) + sandstone rocks + succulents
 	_scatter(terrain, rng, land_root, cacti, int(tree_count * 0.6), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.5), -0.08,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
 	_scatter(terrain, rng, land_root, blooms, int(tree_count * 0.4), radius, "Fruit", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.3), -0.05,
 		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30), 1)
+	_scatter(terrain, rng, land_root, desert_rocks, int(rock_count * 0.6), radius, "Stone", water_level + 1.0, 1e9, 0.6, Vector2(0.7, 1.6), -0.10,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
+	_scatter(terrain, rng, land_root, succulents, int(tree_count * 0.35), radius, "Biomass", water_level + 1.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.04,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 0.30))
+	_scatter(terrain, rng, land_root, shells, int(rock_count * 0.25), radius, "Shell", water_level + 0.3, water_level + 2.2, 0.5, Vector2(0.7, 1.3), -0.03,
+		Vector2.ZERO, 1e9, 0, occ, Vector2(-1.0, 1.35), 1)
 	# ice: snowy trees/rocks/dead trees + the true Crystal
 	_scatter(terrain, rng, land_root, snow_trees, int(tree_count * 0.6), radius, "Wood", water_level + 2.0, veg_max, 0.5, Vector2(0.8, 1.4), -0.45,
 		bloom_center, bloom_radius, 1, occ, Vector2(1.40, 3.0))
@@ -329,6 +359,8 @@ func rebuild_sea(terrain, radius: float, water_level: float, crystal_count: int,
 	_scatter(terrain, rng, sea_root, corals, coral_count, radius, "Coral", -1e9, water_level - 0.8, 1.0, Vector2(0.6, 1.6), -0.08)
 	_scatter(terrain, rng, sea_root, starfish, starfish_count, radius, "Biomass", -1e9, water_level - 0.5, 1.0, Vector2(0.7, 1.3), 0.0)
 	_scatter(terrain, rng, sea_root, kelps, kelp_count, radius, "Biomass", -1e9, water_level - 1.8, 1.0, Vector2(0.8, 1.5), -0.1)
+	# nautilus shells resting on the seafloor
+	_scatter(terrain, rng, sea_root, shells, int(starfish_count * 0.5), radius, "Shell", -1e9, water_level - 0.6, 1.0, Vector2(0.7, 1.3), -0.02, Vector2.ZERO, 1e9, 0, null, Vector2(-1.0, 2.0), 1)
 
 ## A crystal delivered by a meteor impact — harvestable like any scattered resource.
 ## Meteor impacts leave glowing RED "Meteorite Shard" resources (a red crystal variant).
@@ -382,6 +414,7 @@ func respawn_one(pos: Vector3, resource: String) -> void:
 		"Crystal": pool = ice_crystals
 		"Coral": pool = corals
 		"Fruit": pool = blooms
+		"Shell": pool = shells
 		"Biomass":
 			# on land biomass regrows as cacti; underwater as kelp/starfish
 			var on_land: bool = editor and editor.terrain and pos.y > editor.water_level
@@ -393,7 +426,7 @@ func respawn_one(pos: Vector3, resource: String) -> void:
 	rng.seed = randi()
 	var body := _spawn(pool[rng.randi_range(0, pool.size() - 1)], resource.to_lower() + "_re", rng, Vector2(0.8, 1.4))
 	body.set_meta("resource_type", resource)
-	body.set_meta("hits", 1 if resource == "Fruit" else 3)
+	body.set_meta("hits", 1 if (resource == "Fruit" or resource == "Shell") else 3)
 	if resource == "Wood":
 		_slim_tree_collider(body)
 	land_root.add_child(body)
@@ -416,7 +449,7 @@ func clear() -> void:
 
 func _exit_tree() -> void:
 	# template pools live outside the scene tree, so they must be freed manually
-	for pool in [rocks, trees, dead_trees, palms, cacti, blooms, quartz, snow_trees, snow_dead, snow_rocks, ice_crystals, corals, kelps, starfish, satellites]:
+	for pool in [rocks, trees, dead_trees, palms, cacti, blooms, quartz, snow_trees, snow_dead, snow_rocks, ice_crystals, corals, kelps, starfish, satellites, desert_rocks, succulents, shells]:
 		for t in pool:
 			if is_instance_valid(t):
 				t.free()
@@ -496,6 +529,27 @@ static func nature_index() -> Dictionary:
 			f = d.get_next()
 		d.list_dir_end()
 	return out
+
+## OBJ imports arrive as a bare Mesh (no scene, often no material) — wrap one in a
+## holder with a StandardMaterial (albedo texture and/or tint) and autofit it.
+func _add_mesh_obj(pool: Array, path: String, target_size: float, tex_path: String, tint: Color) -> void:
+	if not ResourceLoader.exists(path):
+		return
+	var m = load(path)
+	if not (m is Mesh):
+		return
+	var mi := MeshInstance3D.new()
+	mi.mesh = m
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = tint
+	mat.roughness = 0.95
+	if tex_path != "" and ResourceLoader.exists(tex_path):
+		mat.albedo_texture = load(tex_path)
+	mi.material_override = mat
+	var holder := Node3D.new()
+	holder.add_child(mi)
+	_autofit(mi, target_size)
+	pool.append(holder)
 
 func _add_whole(pool: Array, path: String, target_size: float) -> void:
 	if path == "" or not ResourceLoader.exists(path):

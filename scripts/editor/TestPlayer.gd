@@ -31,7 +31,7 @@ const RES_COLORS := {
 	"Stone": Color(0.72, 0.72, 0.75), "Wood": Color(0.65, 0.42, 0.22),
 	"Quartz": Color(0.85, 0.92, 1.0), "Crystal": Color(0.35, 0.70, 1.0),
 	"Coral": Color(1.0, 0.55, 0.45),
-	"Shard": Color(1.0, 0.22, 0.14), "Fruit": Color(1.0, 0.52, 0.62),
+	"Shard": Color(1.0, 0.22, 0.14), "Fruit": Color(1.0, 0.52, 0.62), "Shell": Color(0.95, 0.88, 0.78),
 	"Biomass": Color(0.50, 1.0, 0.60), "Metal": Color(0.80, 0.82, 0.90),
 }
 
