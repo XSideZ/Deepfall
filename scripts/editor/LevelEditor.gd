@@ -187,6 +187,7 @@ func _ready() -> void:
 	lib.build()
 
 	_setup_environment()
+	Settings.apply_viewport(get_viewport())
 
 	props_root = Node3D.new()
 	props_root.name = "Props"
@@ -305,6 +306,7 @@ func _setup_environment() -> void:
 	# screen-space bounce light: grass glows green near grass, warmth pools in valleys
 	env.ssil_enabled = true
 	env.ssil_intensity = 1.1
+	Settings.apply_env(env)   # user post-fx toggles (ssao/ssil/glow) win
 	# punchier stylized grade (Planet Crafter ref): saturated colours, gentle contrast
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.14

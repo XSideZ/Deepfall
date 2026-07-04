@@ -87,6 +87,7 @@ func _ready() -> void:
 	cam_arm.position = EYE
 	add_child(cam_arm)
 	cam = Camera3D.new()
+	cam.fov = float(Settings.data.fov)
 	cam_arm.add_child(cam)
 
 	# first-person "hand" = a floating alien spore orb (we ARE the alien seed).
@@ -161,8 +162,9 @@ func _set_third(t: bool) -> void:
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotation.y -= e.relative.x * MOUSE_SENS
-		_pitch = clampf(_pitch - e.relative.y * MOUSE_SENS, -1.5, 1.5)
+		var sens: float = MOUSE_SENS * float(Settings.data.sensitivity)
+		rotation.y -= e.relative.x * sens
+		_pitch = clampf(_pitch - e.relative.y * sens, -1.5, 1.5)
 		cam_arm.rotation.x = _pitch
 	elif e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_MIDDLE \
 			and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
