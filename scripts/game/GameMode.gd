@@ -44,7 +44,7 @@ func setup(ed) -> void:
 
 	# starting water: just below the forest band -> only beaches + forest 1 walkable
 	var amp: float = editor._terrain_amplitude()
-	var start_water: float = amp * 0.06   # below the T0 shore table
+	var start_water: float = amp * 0.02   # lapping at the beach; basin floor holds a small lake
 	tide_base = float(Session.meta.get("tide_base", start_water))
 	editor.water_level = float(Session.meta.get("water_now", tide_base))
 	editor.set_game_water(editor.water_level)
@@ -109,7 +109,9 @@ func _forecast_storm() -> void:
 ## peaks only drown after many, many natural storms.
 func _storm_target(kind: int) -> float:
 	var amp: float = editor._terrain_amplitude()
-	var bands: Array = [amp * 0.30, amp * 0.52, amp * 0.74]   # forest->desert->forest2->snow
+	# staircase milestones: flood lower forest1 -> drown forest1+fill the basin
+	# lake -> eat the forest2 plateau; peaks (0.94+) stay the final refuge
+	var bands: Array = [amp * 0.12, amp * 0.32, amp * 0.48]
 	var w: float = editor.water_level
 	var nxt: float = bands[bands.size() - 1] + 4.0
 	var after: float = nxt

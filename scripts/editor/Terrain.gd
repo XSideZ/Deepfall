@@ -253,74 +253,68 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 			# domain warp the sample position
 			var wx := fx + warp.get_noise_2d(fx, fz) * warp_amp
 			var wz := fz + warp.get_noise_2d(fx + 517.0, fz + 517.0) * warp_amp
-			# TIDAL-NOMAD biomes are ELEVATION BANDS (assigned after height below);
-			# here only the plains/jungle mix shapes the terrain
+			# jungle-noise mix (rolls the forest bands a little harder in places)
 			var b01 := clampf(biome_n.get_noise_2d(fx, fz) * 0.5 + 0.5, 0.0, 1.0)
-			b01 = clampf((b01 - 0.5) * 1.8 + 0.5, 0.0, 1.0)
-			var w_desert := 0.0
-			var w_ice := 0.0
 			var w_jungle := smoothstep(0.55, 0.78, b01)
-			var w_plain: float = 1.0 - w_jungle
 
-			# rolling base hills (local texture on each terrace)
+			# local noise fields
 			var b := clampf(n_base.get_noise_2d(wx, wz) * 0.5 + 0.5, 0.0, 1.0)
 			b = pow(b, 1.8)
 			var plat := clampf(plateau_n.get_noise_2d(wx, wz) * 0.5 + 0.5, 0.0, 1.0)
 			var r := 1.0 - absf(ridge.get_noise_2d(wx, wz))
 			r = pow(clampf(r, 0.0, 1.0), 1.4)
 
-			# TIDAL TERRACES: the island is a staircase of five biome TABLES separated
-			# by near-vertical cliff walls. You cannot climb between bands — the rising
-			# tide is the ladder. Terrace heights sit just above each biome boundary so
-			# a storm that crosses the boundary beaches you onto the next table.
-			#   T0 0.10 shore/forest  T1 0.18 forest  T2 0.34 desert
-			#   T3 0.56 forest 2      T4 0.80 snow summit
-			# CONCENTRIC wedding-cake: rings by distance from the island centre —
-			# shore outside, snow crown in the middle. High tables can NEVER slope
-			# into the ocean; every band is fully enclosed by the band below it.
-			# Border warp is smooth single-octave noise -> clean lips, no spikes.
-			var rr_pos := Vector2(fx - half, fz - half).length() / half
-			rr_pos += region_n.get_noise_2d(fx, fz) * 0.10
-			var ring_edges: Array = [1.0, 0.78, 0.55, 0.34, 0.16, 0.0]
-			var lvl := 4
-			var lfrac := 0.0
-			for ri in 4:
-				if rr_pos <= ring_edges[ri] and rr_pos > ring_edges[ri + 1]:
-					lvl = ri
-					lfrac = (ring_edges[ri] - rr_pos) / (ring_edges[ri] - ring_edges[ri + 1])
-					break
-			var lvl_f := float(lvl) + lfrac
-			var terr: Array = [0.10, 0.18, 0.34, 0.56, 0.80]
-			# clean slope across the table, then STRAIGHT DOWN at the inner edge
-			var riser := smoothstep(0.86, 0.985, lfrac)
-			var base_h: float = terr[4] if lvl >= 4 else lerpf(terr[lvl], terr[lvl + 1], riser)
+			# ========= THE SCAVENGER'S ALTITUDE (directional staircase) =========
+			# WEST -> EAST: beach (0-0.10) -> forest 1 slope (0.10-0.30) -> DESERT
+			# BASIN carved below sea level (floods into a lake) with dry rim routes
+			# N/S -> sheer gatekeeper cliff -> forest 2 plateau (0.46-0.66) ->
+			# jagged ice peaks (0.94 + ridges). Borders wander via smooth noise.
+			var gx := (fx + region_n.get_noise_2d(fx, fz) * grid * 0.05) / float(grid)
+			gx = clampf(gx, 0.0, 1.0)
 
-			# life on the tables: gentle hills + subtle buildable shelves, and jagged
-			# ridge crowns only on the snow summit table
-			var local_h := (b - 0.5) * 0.075 + (plat - 0.5) * 0.045
-			local_h += r * 0.14 * smoothstep(3.4, 4.0, lvl_f + riser)
-			local_h *= 1.0 + w_jungle * 0.35   # jungle-noise areas roll harder
+			var base_h := 0.03
+			base_h += 0.07 * smoothstep(0.02, 0.15, gx)    # beach rise
+			base_h += 0.20 * smoothstep(0.15, 0.38, gx)    # forest 1 gentle climb
+			base_h += 0.04 * smoothstep(0.38, 0.43, gx)    # desert rim
+			base_h += 0.12 * smoothstep(0.60, 0.635, gx)   # forest 2 CLIFF (gatekeeper)
+			base_h += 0.20 * smoothstep(0.64, 0.80, gx)    # plateau climb
+			base_h += 0.28 * smoothstep(0.80, 0.94, gx)    # peaks base
 
+			var peak_w := smoothstep(0.78, 0.90, gx)
+			var local_h := (b - 0.5) * 0.05 + (plat - 0.5) * 0.03
+			local_h += r * 0.45 * peak_w                   # towering jagged summits
+			local_h *= 1.0 + w_jungle * 0.3
 			var hnorm: float = base_h + local_h
+
+			# THE DESERT BASIN: a vast crater in the desert band, floor BELOW sea
+			# level -> becomes a deep lake as the tide rises. Sheer walls; the rim
+			# stays at band height = the dry route around it.
+			var bx := (fx / float(grid) - 0.505) * float(grid)
+			var bz := fz - half
+			var d_n := sqrt(pow(bx / (grid * 0.105), 2.0) + pow(bz / (grid * 0.24), 2.0)) 				+ region_n.get_noise_2d(fx + 900.0, fz + 900.0) * 0.16
+			if d_n < 1.0:
+				var bowl := -0.17 + 0.20 * d_n * d_n + (b - 0.5) * 0.03
+				hnorm = lerpf(bowl, hnorm, smoothstep(0.86, 1.0, d_n))
+
 			var height := hnorm * amplitude
-			# radial falloff: sink land to an ocean floor before the map edge
+			# edges: the west flows into the sea as beach; north/south/east end in
+			# sheer sea-cliffs — bands may TOUCH the coast but never slope into it
 			var nx := (fx - half) / half
 			var nz := (fz - half) / half
-			var rr := sqrt(nx * nx + nz * nz)
-			var fall := 1.0 - smoothstep(0.86, 1.0, rr)   # only the shore ring meets the sea
+			var fall := 1.0 - smoothstep(0.93, 1.0, absf(nz))
+			fall *= 1.0 - smoothstep(0.95, 1.0, maxf(nx, 0.0))
+			fall *= smoothstep(0.005, 0.05, gx)
 			var idx := z * side + x
 			heights[idx] = lerpf(-16.0, height, fall)
-			# TIDAL-NOMAD biome sandwich by ELEVATION: beach (waterline sand band in the
-			# shader) -> forest -> desert -> forest 2 -> snow peaks; boundaries rippled
-			# by noise so bands wander instead of reading as contour lines
-			var hb := heights[idx] + biome_n.get_noise_2d(fx * 1.8, fz * 1.8) * amplitude * 0.045
-			var bio_v := 0.5                       # forest 1 (bright plains green)
-			if hb > amplitude * BAND_SNOW:
-				bio_v = 1.7                        # snow peaks
-			elif hb > amplitude * BAND_FOREST2:
-				bio_v = 1.0                        # forest 2 (deep jungle green)
-			elif hb > amplitude * BAND_DESERT:
-				bio_v = 0.05                       # desert belt
+			# biomes follow the SAME west->east bands (the desert is a basin, so
+			# elevation can no longer tell biomes apart)
+			var bio_v := 0.5                               # beach + forest 1
+			if gx > 0.80:
+				bio_v = 1.7                                # ice peaks
+			elif gx > 0.615:
+				bio_v = 1.0                                # forest 2 plateau
+			elif gx > 0.40 or d_n < 1.0:
+				bio_v = 0.05                               # desert rim + basin
 			biomes[idx] = bio_v
 
 	# mesa buttes: wide flat-topped rock rises blended smoothly into the ground
@@ -329,7 +323,7 @@ func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTr
 	var mrng := RandomNumberGenerator.new()
 	mrng.seed = noise_seed + 7707
 	mesas.clear()
-	var mesa_count := clampi(grid / 128, 2, 4)
+	var mesa_count := 0   # no mesa buttes on the staircase layout
 	var placed_mesas := 0
 	var tries := 0
 	while placed_mesas < mesa_count and tries < 60:
