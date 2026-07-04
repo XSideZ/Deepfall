@@ -78,7 +78,7 @@ func setup(p_editor) -> void:
 	for p in CORAL_WHOLE_PATHS:
 		_add_whole(corals, p, 1.2)
 	corals.append_array(_variants(CORAL_SET_PATH, 1.2))
-	_add_whole(kelps, KELP_PATH, 2.2)
+	_add_whole(kelps, KELP_PATH, 5.4)   # LONG kelp towers (underwater ref look)
 	starfish = _variants(STARFISH_PATH, 0.45)
 	_add_whole(satellites, SAT_A_PATH, 2.8)
 	_add_whole(satellites, SAT_B_PATH, 2.8)

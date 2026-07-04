@@ -155,8 +155,8 @@ func expand(room_idx: int, dir_idx: int, type: int) -> bool:
 	_rebuild()
 	return true
 
-func replay(log: Array) -> void:
-	for e in log:
+func replay(entries: Array) -> void:
+	for e in entries:
 		expand(int(e.p), int(e.d), int(e.t))
 
 # --- seed sockets: glowing wall bulbs marking every spot a seed can be planted ------

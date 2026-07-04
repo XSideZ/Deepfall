@@ -18,7 +18,7 @@ const BuildSystemScript := preload("res://scripts/editor/BuildSystem.gd")
 const SAVE_PATH := "user://deepfall_map.json"
 const HEIGHTS_PATH := "user://deepfall_heights.bin"
 const SETTINGS_PATH := "user://editor_settings.json"
-const HDRI_PATH := "res://assets/sky/sky_89_2k.png"   # stylized painted skybox (Jay's download)
+# skies: assets/sky/*.png|hdr are auto-discovered and cycled by the Sky button
 const GROUND_LAYER := 1
 const PROP_LAYER := 2
 
@@ -42,7 +42,7 @@ var tree_count := 50
 var crystal_count := 30
 var coral_count := 45
 var starfish_count := 20
-var kelp_count := 30
+var kelp_count := 60
 var satellite_count := 10
 var water_debounce: Timer
 var meteor_timer: Timer
@@ -340,6 +340,23 @@ func _setup_environment() -> void:
 
 	_apply_sky()
 
+## Every panorama in assets/sky becomes a cyclable sky (Jay's skybox collection).
+func _sky_panoramas() -> Array:
+	var out: Array = []
+	var d := DirAccess.open("res://assets/sky")
+	if d == null:
+		return out
+	d.list_dir_begin()
+	var f := d.get_next()
+	while f != "":
+		var ext := f.get_extension().to_lower()
+		if not d.current_is_dir() and (ext == "png" or ext == "jpg" or ext == "hdr" or ext == "exr"):
+			out.append("res://assets/sky/" + f)
+		f = d.get_next()
+	d.list_dir_end()
+	out.sort()
+	return out
+
 func _apply_sky() -> void:
 	var env := world_env.environment
 	if sky_mode == "space":
@@ -348,17 +365,26 @@ func _apply_sky() -> void:
 		env_sky.sky_material = sm
 		# space sky gives no useful ambient, so we drive lighting ourselves (day/night)
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	elif sky_mode == "hdri" and ResourceLoader.exists(HDRI_PATH):
-		var pano := PanoramaSkyMaterial.new()
-		pano.panorama = load(HDRI_PATH)
-		env_sky.sky_material = pano
-		env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	elif sky_mode.begins_with("pano:"):
+		var path := "res://assets/sky/" + sky_mode.substr(5)
+		if ResourceLoader.exists(path):
+			var pano := PanoramaSkyMaterial.new()
+			pano.panorama = load(path)
+			env_sky.sky_material = pano
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+		else:
+			sky_mode = "dynamic"
+			env_sky.sky_material = PhysicalSkyMaterial.new()
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	else:
 		env_sky.sky_material = PhysicalSkyMaterial.new()  # dynamic, sun-synced
 		sky_mode = "dynamic"
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	if sky_button:
-		sky_button.text = "Sky: " + sky_mode.capitalize()
+		var label := sky_mode
+		if sky_mode.begins_with("pano:"):
+			label = sky_mode.substr(5).get_basename().replace("_2k", "")
+		sky_button.text = "Sky: " + label.capitalize()
 	_apply_lighting()
 
 ## Lighting is driven per-frame by the day/night compositor (_update_daynight).
@@ -396,7 +422,7 @@ func _update_daynight(delta: float) -> void:
 
 	var env := world_env.environment
 	# painted skybox: dim the whole panorama through the night (it's a static image)
-	env.background_energy_multiplier = (0.18 + 0.82 * _day_f) if sky_mode == "hdri" else 1.0
+	env.background_energy_multiplier = (0.18 + 0.82 * _day_f) if sky_mode.begins_with("pano:") else 1.0
 	if sky_mode == "space":
 		env.ambient_light_color = Color(0.30, 0.36, 0.52).lerp(Color(0.60, 0.68, 0.82), _day_f)
 		# midday ambient a touch lower than before -> sun shadows keep some depth
@@ -416,12 +442,12 @@ func _update_daynight(delta: float) -> void:
 			sm.set_shader_parameter("sun_color", col)
 
 func _toggle_sky() -> void:
-	if sky_mode == "space":
-		sky_mode = "hdri"
-	elif sky_mode == "hdri":
-		sky_mode = "dynamic"
-	else:
-		sky_mode = "space"
+	# cycle: space -> dynamic -> every panorama in assets/sky -> back to space
+	var modes: Array = ["space", "dynamic"]
+	for p in _sky_panoramas():
+		modes.append("pano:" + String(p).get_file())
+	var i := modes.find(sky_mode)
+	sky_mode = modes[(i + 1) % modes.size()]
 	_apply_sky()
 
 func _toggle_time() -> void:
@@ -1128,11 +1154,13 @@ func _meteor_shower() -> void:
 	_storm_active = true
 	_flash("METEOR STORM!")
 	_storm_tint(true)
-	# 50-60 impacts spread across ~30 seconds
-	var n := randi_range(50, 60)
+	# 26-32 impacts spread across ~45s. With 8-13s flights that keeps ~8 rocks
+	# airborne at once — dozens of concurrent lights/particle systems piling up at
+	# the shower's tail was overloading the GPU (the silent end-of-shower crash).
+	var n := randi_range(26, 32)
 	for i in n:
-		_spawn_meteor(randf() * 28.0)
-	var ender := get_tree().create_timer(31.0)
+		_spawn_meteor(float(i) * 1.5 + randf() * 1.2)
+	var ender := get_tree().create_timer(50.0)
 	ender.timeout.connect(_end_storm)
 
 func _end_storm() -> void:
@@ -1147,6 +1175,47 @@ func _storm_tint(on: bool) -> void:
 
 func _set_storm_mix(v: float) -> void:
 	_storm_mix = v   # the day/night compositor reads this every frame
+
+var _fire_pm: ParticleProcessMaterial
+var _fire_mesh: SphereMesh
+
+## Shared across every meteor — building these per rock piled up GPU resources.
+func _meteor_fire_pm() -> ParticleProcessMaterial:
+	if _fire_pm == null:
+		_fire_pm = ParticleProcessMaterial.new()
+		_fire_pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+		_fire_pm.emission_sphere_radius = 0.9
+		_fire_pm.gravity = Vector3(0, 2.5, 0)          # flames curl upward off the trail
+		_fire_pm.initial_velocity_min = 0.2
+		_fire_pm.initial_velocity_max = 1.2
+		_fire_pm.scale_min = 0.6
+		_fire_pm.scale_max = 2.2
+		var fcurve := Curve.new()
+		fcurve.add_point(Vector2(0.0, 1.0))
+		fcurve.add_point(Vector2(1.0, 0.05))
+		var fct := CurveTexture.new()
+		fct.curve = fcurve
+		_fire_pm.scale_curve = fct
+		var fgrad := Gradient.new()
+		fgrad.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+		fgrad.colors = PackedColorArray([Color(1.0, 0.85, 0.3, 0.9), Color(1.0, 0.35, 0.05, 0.6), Color(0.25, 0.1, 0.08, 0.0)])
+		var fgt := GradientTexture1D.new()
+		fgt.gradient = fgrad
+		_fire_pm.color_ramp = fgt
+	return _fire_pm
+
+func _meteor_fire_mesh() -> SphereMesh:
+	if _fire_mesh == null:
+		_fire_mesh = SphereMesh.new()
+		_fire_mesh.radius = 0.5
+		_fire_mesh.height = 1.0
+		var fmat := StandardMaterial3D.new()
+		fmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		fmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		fmat.vertex_color_use_as_albedo = true
+		_fire_mesh.material = fmat
+	return _fire_mesh
 
 func _spawn_meteor(delay: float) -> void:
 	await get_tree().create_timer(delay).timeout
@@ -1190,48 +1259,22 @@ func _spawn_meteor(delay: float) -> void:
 	mat.emission_energy_multiplier = 2.4
 	core.material_override = mat
 	rock.add_child(core)
-	var glow := OmniLight3D.new()
-	glow.light_color = Color(1.0, 0.55, 0.2)
-	glow.light_energy = 3.0
-	glow.omni_range = 22.0
-	rock.add_child(glow)
-	# flame trail: world-space particles stream out behind the rock as it flies
+	# ~half the rocks carry a light (dozens of live dynamic lights was crash fuel)
+	var glow: OmniLight3D = null
+	if randi() % 2 == 0:
+		glow = OmniLight3D.new()
+		glow.light_color = Color(1.0, 0.55, 0.2)
+		glow.light_energy = 2.4
+		glow.omni_range = 18.0
+		rock.add_child(glow)
+	# flame trail: shared config resources (built once), tight cull box
 	var fire := GPUParticles3D.new()
-	fire.amount = 160
-	fire.lifetime = 2.2
+	fire.amount = 90
+	fire.lifetime = 2.0
 	fire.local_coords = false
-	fire.visibility_aabb = AABB(Vector3(-300, -300, -300), Vector3(600, 600, 600))
-	var fpm := ParticleProcessMaterial.new()
-	fpm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	fpm.emission_sphere_radius = 0.9
-	fpm.gravity = Vector3(0, 2.5, 0)          # flames curl upward off the trail
-	fpm.initial_velocity_min = 0.2
-	fpm.initial_velocity_max = 1.2
-	fpm.scale_min = 0.6
-	fpm.scale_max = 2.2
-	var fcurve := Curve.new()
-	fcurve.add_point(Vector2(0.0, 1.0))
-	fcurve.add_point(Vector2(1.0, 0.05))
-	var fct := CurveTexture.new()
-	fct.curve = fcurve
-	fpm.scale_curve = fct
-	var fgrad := Gradient.new()
-	fgrad.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
-	fgrad.colors = PackedColorArray([Color(1.0, 0.85, 0.3, 0.9), Color(1.0, 0.35, 0.05, 0.6), Color(0.25, 0.1, 0.08, 0.0)])
-	var fgt := GradientTexture1D.new()
-	fgt.gradient = fgrad
-	fpm.color_ramp = fgt
-	fire.process_material = fpm
-	var fmesh := SphereMesh.new()
-	fmesh.radius = 0.5
-	fmesh.height = 1.0
-	var fmat := StandardMaterial3D.new()
-	fmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fmat.vertex_color_use_as_albedo = true
-	fmesh.material = fmat
-	fire.draw_pass_1 = fmesh
+	fire.visibility_aabb = AABB(Vector3(-70, -70, -70), Vector3(140, 140, 140))
+	fire.process_material = _meteor_fire_pm()
+	fire.draw_pass_1 = _meteor_fire_mesh()
 	rock.add_child(fire)
 	add_child(rock)
 
@@ -1259,7 +1302,8 @@ func _spawn_meteor(delay: float) -> void:
 	flash_tw.tween_property(core, "scale", Vector3(3.4, 3.4, 3.4), 0.16)
 	flash_tw.parallel().tween_property(mat, "emission_energy_multiplier", 9.0, 0.06)
 	flash_tw.chain().tween_property(mat, "emission_energy_multiplier", 0.0, 0.3)
-	flash_tw.parallel().tween_property(glow, "light_energy", 0.0, 0.35)
+	if glow:
+		flash_tw.parallel().tween_property(glow, "light_energy", 0.0, 0.35)
 	await flash_tw.finished
 	# let straggler flame particles finish before freeing
 	await get_tree().create_timer(2.2).timeout
@@ -1267,7 +1311,7 @@ func _spawn_meteor(delay: float) -> void:
 		rock.queue_free()
 	if audio:
 		audio.play("thud", 0.15, -12.0)
-	# with a 50-60 rock storm, only some impacts leave a meteorite shard (~1 in 4)
+	# only some impacts leave a meteorite shard (~1 in 4)
 	if resource_scatter and randf() < 0.25:
 		resource_scatter.spawn_meteor_shard(target + Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5)))
 

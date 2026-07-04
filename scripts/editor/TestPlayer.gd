@@ -395,12 +395,12 @@ func _update_vine() -> void:
 	var a: Vector3 = (hand.global_position if hand else global_position + Vector3(0, 1.2, 0))
 	var b := _grap_point
 	var mid := (a + b) * 0.5
-	var len := a.distance_to(b)
+	var vlen := a.distance_to(b)
 	_vine.global_position = mid
-	if len > 0.01:
+	if vlen > 0.01:
 		_vine.look_at(b, Vector3.UP if absf((b - a).normalized().y) < 0.99 else Vector3.RIGHT)
 		_vine.rotate_object_local(Vector3.RIGHT, PI * 0.5)   # cylinder axis = Y -> aim it
-		_vine.scale = Vector3(1, len, 1)
+		_vine.scale = Vector3(1, vlen, 1)
 
 # --- footprints (sand + snow) --------------------------------------------------
 const SNOW_LEVEL := 52.0
@@ -527,10 +527,10 @@ func _make_hand() -> Node3D:
 	if path != "" and ResourceLoader.exists(path):
 		var res = ResourceLoader.load(path)
 		if res is PackedScene:
-			var model: Node3D = res.instantiate()
+			var mdl: Node3D = res.instantiate()
 			var holder := Node3D.new()
-			holder.add_child(model)
-			_autofit(model, 0.45)   # normalise any GLB to ~0.45 m so scale doesn't matter
+			holder.add_child(mdl)
+			_autofit(mdl, 0.45)   # normalise any GLB to ~0.45 m so scale doesn't matter
 			return holder
 	return _make_spore_orb()
 

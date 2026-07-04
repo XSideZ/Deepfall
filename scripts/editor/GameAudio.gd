@@ -41,12 +41,12 @@ func _looper(stream: AudioStreamWAV) -> AudioStreamPlayer:
 	p.play()
 	return p
 
-func play(name: String, pitch_var := 0.08, vol_db := -6.0) -> void:
-	if not fx.has(name):
+func play(fx_name: String, pitch_var := 0.08, vol_db := -6.0) -> void:
+	if not fx.has(fx_name):
 		return
 	var p: AudioStreamPlayer = pool[_pool_idx]
 	_pool_idx = (_pool_idx + 1) % pool.size()
-	p.stream = fx[name]
+	p.stream = fx[fx_name]
 	p.pitch_scale = randf_range(1.0 - pitch_var, 1.0 + pitch_var)
 	p.volume_db = vol_db
 	p.play()

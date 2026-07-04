@@ -152,7 +152,7 @@ static func _surface_components(arrays: Array, verts: PackedVector3Array, idx: P
 	var out: Array = []
 	for key in comp_tris.keys():
 		var tris: PackedInt32Array = comp_tris[key]
-		var remap := {}
+		var remap_ids := {}
 		var nv := PackedVector3Array()
 		var nn := PackedVector3Array()
 		var nuv := PackedVector2Array()
@@ -161,8 +161,8 @@ static func _surface_components(arrays: Array, verts: PackedVector3Array, idx: P
 		var first := true
 		for k in tris.size():
 			var old := tris[k]
-			if not remap.has(old):
-				remap[old] = nv.size()
+			if not remap_ids.has(old):
+				remap_ids[old] = nv.size()
 				nv.append(verts[old])
 				if normals.size() == verts.size():
 					nn.append(normals[old])
@@ -173,7 +173,7 @@ static func _surface_components(arrays: Array, verts: PackedVector3Array, idx: P
 					first = false
 				else:
 					box = box.expand(verts[old])
-			nidx.append(remap[old])
+			nidx.append(remap_ids[old])
 		var na := []
 		na.resize(Mesh.ARRAY_MAX)
 		na[Mesh.ARRAY_VERTEX] = nv

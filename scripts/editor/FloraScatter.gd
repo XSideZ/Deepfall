@@ -34,6 +34,8 @@ const ENTRIES := [
 	{ "f": "Petal_1.fbx", "n": 220, "h": 0.10, "dim": "max", "s": Vector2(0.7, 1.4), "patch": 0.15, "sway": 0.02 },
 	{ "f": "Petal_2.fbx", "n": 220, "h": 0.10, "dim": "max", "s": Vector2(0.7, 1.4), "patch": 0.15, "sway": 0.02 },
 	{ "f": "Petal_4.fbx", "n": 220, "h": 0.10, "dim": "max", "s": Vector2(0.7, 1.4), "patch": 0.15, "sway": 0.02 },
+	{ "f": "Petal_3.fbx", "n": 200, "h": 0.10, "dim": "max", "s": Vector2(0.7, 1.4), "patch": 0.15, "sway": 0.02 },
+	{ "f": "Petal_5.fbx", "n": 200, "h": 0.10, "dim": "max", "s": Vector2(0.7, 1.4), "patch": 0.15, "sway": 0.02 },
 	{ "f": "Mushroom_Common.fbx", "n": 140, "h": 0.30, "dim": "h", "s": Vector2(0.7, 1.4), "patch": 0.35, "sway": 0.0 },
 	{ "f": "Mushroom_Laetiporus.fbx", "n": 60, "h": 0.35, "dim": "h", "s": Vector2(0.7, 1.3), "patch": 0.35, "sway": 0.0 },
 	# stones (no wind, obviously) — allowed everywhere including the desert
@@ -43,6 +45,11 @@ const ENTRIES := [
 	{ "f": "Pebble_Square_1.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
 	{ "f": "Pebble_Square_3.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
 	{ "f": "Pebble_Square_6.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Round_3.fbx", "n": 130, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Round_5.fbx", "n": 130, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Square_2.fbx", "n": 110, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Square_4.fbx", "n": 110, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
+	{ "f": "Pebble_Square_5.fbx", "n": 110, "h": 0.28, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
 ]
 
 var _layers: Array = []   # { mm, entry, base_xf, norm }
