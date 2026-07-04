@@ -264,7 +264,7 @@ func _ready() -> void:
 		var GameModeScript := load("res://scripts/game/GameMode.gd")
 		game_mode = GameModeScript.new()
 		add_child(game_mode)
-		game_mode.setup(self)
+		await game_mode.setup(self)
 	else:
 		_grow_grass()
 		_scatter_resources()
@@ -2538,7 +2538,9 @@ func _tool_button(parent: Control, text: String, t: int) -> void:
 func _generate_mountains() -> void:
 	# Big features scaled to the world, tall peaks. Frequency ~2.5 features across the map.
 	var freq := 2.5 / float(terrain.grid)
-	terrain.generate(randi(), _terrain_amplitude(), freq)
+	_show_loading("Growing the world...")
+	await terrain.generate(randi(), _terrain_amplitude(), freq, get_tree(), _loading_progress)
+	_hide_loading()
 	_refresh_terrain_biome()
 	_grow_grass()
 	_scatter_resources()
@@ -2552,6 +2554,36 @@ func _terrain_amplitude() -> float:
 
 func flash_msg(s: String) -> void:
 	_flash(s)
+
+# --- world-generation loading overlay (Huge maps take a while; keep it visible) ---
+var _load_layer: CanvasLayer
+var _load_label: Label
+
+func _show_loading(msg: String) -> void:
+	if _load_layer == null:
+		_load_layer = CanvasLayer.new()
+		_load_layer.layer = 90
+		add_child(_load_layer)
+		var bg := ColorRect.new()
+		bg.color = Color(0.02, 0.05, 0.045, 0.92)
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_load_layer.add_child(bg)
+		_load_label = Label.new()
+		_load_label.set_anchors_preset(Control.PRESET_CENTER)
+		_load_label.add_theme_font_size_override("font_size", 26)
+		_load_label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.75))
+		_load_layer.add_child(_load_label)
+	_load_layer.visible = true
+	_load_label.text = msg
+	_load_label.position = Vector2(-140, -20)
+
+func _loading_progress(f: float) -> void:
+	if _load_label:
+		_load_label.text = "Growing the world...  %d%%" % int(f * 100.0)
+
+func _hide_loading() -> void:
+	if _load_layer:
+		_load_layer.visible = false
 
 func _exit_to_menu() -> void:
 	if game_mode:
@@ -2569,7 +2601,9 @@ func generate_world_for_game(seed_v: int, grid: int, barren_water_y: float) -> v
 	water_level = barren_water_y
 	_build_terrain(grid)
 	var freq := 2.5 / float(terrain.grid)
-	terrain.generate(seed_v, _terrain_amplitude(), freq)
+	_show_loading("Growing the world...")
+	await terrain.generate(seed_v, _terrain_amplitude(), freq, get_tree(), _loading_progress)
+	_hide_loading()
 	_refresh_terrain_biome()
 	if water and is_instance_valid(water):
 		water.position.y = water_level
@@ -2762,7 +2796,7 @@ func load_world_from(dir: String) -> void:
 
 ## Bigger maps get proportionally more grass/resources (capped for performance).
 func _area_mult() -> float:
-	return clampf(pow(float(grid_size) / 512.0, 2.0), 0.5, 4.0)
+	return clampf(pow(float(grid_size) / 512.0, 2.0), 0.5, 8.0)
 
 func _grow_grass() -> void:
 	if flora and terrain:

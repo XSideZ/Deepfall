@@ -66,7 +66,7 @@ func setup(ed) -> void:
 	_base_radius = 26.0 + grid * 0.02
 	_grow_radius = 16.0 + grid * 0.03
 
-	editor.generate_world_for_game(int(Session.meta.get("seed", 12345)), grid, WATER_HIDDEN)
+	await editor.generate_world_for_game(int(Session.meta.get("seed", 12345)), grid, WATER_HIDDEN)
 	# fresh worlds begin at daybreak so you get a full day of light
 	if not FileAccess.file_exists(Session.world_dir + "/world.json") or bloom_stage == 0:
 		editor.day_phase = 0.05

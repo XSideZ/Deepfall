@@ -184,7 +184,9 @@ func sculpt(world_pos: Vector3, radius: float, amount: float, mode: int, target_
 ## Dramatic terrain: domain-warped base hills + ridged-multifractal mountain ridges,
 ## with terraced cliff bands in the highlands. Heightmap (no overhangs) but the
 ## terracing + steep ridges give strong verticality and readable cliffs.
-func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
+## tree/progress: when given, generation yields every few rows so the window stays
+## responsive (Huge = ~2.4M vertices of pure script noise — it froze "not responding").
+func generate(noise_seed: int, amplitude: float, frequency: float, tree: SceneTree = null, progress := Callable()) -> void:
 	var n_base := FastNoiseLite.new()
 	n_base.seed = noise_seed
 	n_base.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -271,6 +273,10 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 	var side := grid + 1
 	var half := grid * 0.5
 	for z in side:
+		if tree and (z % 48) == 0:
+			if progress.is_valid():
+				progress.call(float(z) / float(side) * 0.9)
+			await tree.process_frame
 		for x in side:
 			var fx := float(x)
 			var fz := float(z)
@@ -398,7 +404,13 @@ func generate(noise_seed: int, amplitude: float, frequency: float) -> void:
 		placed_mesas += 1
 
 	# round off every crest, terrace lip, and warp artifact (fewer passes on huge grids)
+	if progress.is_valid():
+		progress.call(0.92)
+	if tree:
+		await tree.process_frame
 	_smooth_heights(2 if grid <= 768 else 1)
+	if progress.is_valid():
+		progress.call(1.0)
 
 	update_region(0, grid, 0, grid)
 	_upload()
