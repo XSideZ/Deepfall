@@ -1222,10 +1222,17 @@ func _meteor_fire_mesh() -> SphereMesh:
 		_fire_mesh.material = fmat
 	return _fire_mesh
 
+var _live_meteors := 0
+
 func _spawn_meteor(delay: float) -> void:
 	await get_tree().create_timer(delay).timeout
 	if terrain == null:
 		return
+	# HARD concurrency cap — pile-ups of live trails/lights at the shower's tail
+	# were overloading the GPU (the freeze/crash). Extra rocks just skip.
+	if _live_meteors >= 8:
+		return
+	_live_meteors += 1
 	# most impacts spread across the whole island; ~30% bias near the player for show
 	var target := Vector3.ZERO
 	var found := false
@@ -1244,6 +1251,7 @@ func _spawn_meteor(delay: float) -> void:
 			found = true
 			break
 	if not found:
+		_live_meteors = maxi(_live_meteors - 1, 0)
 		return
 
 	# a PHYSICAL burning rock: dark tumbling core, fire-hot glow, and a long
@@ -1264,9 +1272,9 @@ func _spawn_meteor(delay: float) -> void:
 	mat.emission_energy_multiplier = 2.4
 	core.material_override = mat
 	rock.add_child(core)
-	# ~half the rocks carry a light (dozens of live dynamic lights was crash fuel)
+	# ~a third of the rocks carry a light (dozens of live dynamic lights was crash fuel)
 	var glow: OmniLight3D = null
-	if randi() % 2 == 0:
+	if randi() % 3 == 0:
 		glow = OmniLight3D.new()
 		glow.light_color = Color(1.0, 0.55, 0.2)
 		glow.light_energy = 2.4
@@ -1274,10 +1282,10 @@ func _spawn_meteor(delay: float) -> void:
 		rock.add_child(glow)
 	# flame trail: shared config resources (built once), tight cull box
 	var fire := GPUParticles3D.new()
-	fire.amount = 90
-	fire.lifetime = 2.0
+	fire.amount = 56
+	fire.lifetime = 1.5
 	fire.local_coords = false
-	fire.visibility_aabb = AABB(Vector3(-70, -70, -70), Vector3(140, 140, 140))
+	fire.visibility_aabb = AABB(Vector3(-45, -45, -45), Vector3(90, 90, 90))
 	fire.process_material = _meteor_fire_pm()
 	fire.draw_pass_1 = _meteor_fire_mesh()
 	rock.add_child(fire)
@@ -1311,7 +1319,8 @@ func _spawn_meteor(delay: float) -> void:
 		flash_tw.parallel().tween_property(glow, "light_energy", 0.0, 0.35)
 	await flash_tw.finished
 	# let straggler flame particles finish before freeing
-	await get_tree().create_timer(2.2).timeout
+	await get_tree().create_timer(1.2).timeout
+	_live_meteors = maxi(_live_meteors - 1, 0)
 	if is_instance_valid(rock):
 		rock.queue_free()
 	if audio:

@@ -39,14 +39,14 @@ const ENTRIES := [
 	{ "f": "Mushroom_Common.fbx", "n": 140, "h": 0.30, "dim": "h", "s": Vector2(0.7, 1.4), "patch": 0.35, "sway": 0.0 },
 	{ "f": "Mushroom_Laetiporus.fbx", "n": 60, "h": 0.35, "dim": "h", "s": Vector2(0.7, 1.3), "patch": 0.35, "sway": 0.0 },
 	# Jay's GLB flowers: one single + the 7-flower pack (one entry per bloom)
-	{ "path": "res://assets/props/flower_single.glb", "n": 150, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.15, "sway": 0.05 },
-	{ "path": "res://assets/props/flower_pack.glb", "mi": 0, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
-	{ "path": "res://assets/props/flower_pack.glb", "mi": 1, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
-	{ "path": "res://assets/props/flower_pack.glb", "mi": 2, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
-	{ "path": "res://assets/props/flower_pack.glb", "mi": 3, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
-	{ "path": "res://assets/props/flower_pack.glb", "mi": 4, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
-	{ "path": "res://assets/props/flower_pack.glb", "mi": 5, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
-	{ "path": "res://assets/props/flower_pack.glb", "mi": 6, "n": 90, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.3, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_single.glb", "n": 200, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.1, "sway": 0.05 },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 0, "n": 140, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.12, "sway": 0.05, "solid": true },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 1, "n": 140, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.12, "sway": 0.05, "solid": true },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 2, "n": 140, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.12, "sway": 0.05, "solid": true },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 3, "n": 140, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.12, "sway": 0.05, "solid": true },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 4, "n": 140, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.12, "sway": 0.05, "solid": true },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 5, "n": 140, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.12, "sway": 0.05, "solid": true },
+	{ "path": "res://assets/props/flower_pack.glb", "mi": 6, "n": 140, "h": 0.45, "dim": "h", "s": Vector2(0.8, 1.25), "patch": 0.12, "sway": 0.05, "solid": true },
 	# stones (no wind, obviously) — allowed everywhere including the desert
 	{ "f": "Pebble_Round_1.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
 	{ "f": "Pebble_Round_2.fbx", "n": 150, "h": 0.30, "dim": "max", "s": Vector2(0.6, 1.6), "patch": -1.0, "sway": 0.0, "bio": Vector2(-1.0, 1.35) },
@@ -86,11 +86,12 @@ func _ready() -> void:
 			continue
 		ResourceScatterScript.opaque_mesh(found.mesh)
 		var mesh: Mesh = found.mesh
+		var solid: bool = bool(e.get("solid", false))
 		# normalize: raw pack sizes are inconsistent, so scale to the intended size
 		var ab: AABB = (found.xf as Transform3D) * mesh.get_aabb()
 		var native: float = ab.size.y if String(e.dim) == "h" else ab.size[ab.size.max_axis_index()]
 		var norm: float = float(e.h) / maxf(native, 0.001)
-		_apply_sway(mesh, float(e.sway), mesh.get_aabb().size.y)
+		_apply_sway(mesh, float(e.sway), mesh.get_aabb().size.y, solid)
 		var mmi := MultiMeshInstance3D.new()
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -104,7 +105,7 @@ func _ready() -> void:
 
 ## Swap each surface's StandardMaterial for the wind-sway shader (keeps its
 ## albedo texture + colour). sway 0 still swaps so lighting stays consistent.
-func _apply_sway(mesh: Mesh, sway: float, mesh_h: float) -> void:
+func _apply_sway(mesh: Mesh, sway: float, mesh_h: float, solid := false) -> void:
 	for s in mesh.get_surface_count():
 		var m := mesh.surface_get_material(s)
 		if m is ShaderMaterial:
@@ -116,6 +117,7 @@ func _apply_sway(mesh: Mesh, sway: float, mesh_h: float) -> void:
 			sm.set_shader_parameter("albedo_col", (m as BaseMaterial3D).albedo_color)
 		sm.set_shader_parameter("sway", sway)
 		sm.set_shader_parameter("mesh_h", maxf(mesh_h, 0.001))
+		sm.set_shader_parameter("force_a", 1.0 if solid else 0.0)
 		mesh.surface_set_material(s, sm)
 		_sway_mats.append(sm)
 
